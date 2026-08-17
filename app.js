@@ -2583,62 +2583,187 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// Pretty print HTML with clean indentation
+// Pretty print HTML with clean indentation and inline tag closure on the same line
 function formatHtmlCode(html) {
-  if (!html) return '';
-  let formatted = '';
-  let indent = 0;
+  if (!html || typeof html !== 'string') return '';
+  const trimmed = html.trim();
+  if (!trimmed) return '';
+
+  const hasDocType = /^<!doctype/i.test(trimmed);
+  const docTypeMatch = trimmed.match(/^<!doctype[^>]*>/i);
+  const docTypeStr = docTypeMatch ? docTypeMatch[0] : '<!DOCTYPE html>';
+  const hasHtmlTag = /<html[\s>]/i.test(trimmed);
+  const hasHeadTag = /<head[\s>]/i.test(trimmed);
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(trimmed, 'text/html');
+
   const tab = '  ';
-
-  // Normalize self-closing and clean tags
-  const tokens = html
-    .replace(/>\s*</g, '><')
-    .replace(/</g, '\n<')
-    .split('\n')
-    .map((s) => s.trim())
-    .filter(Boolean);
-
   const voidTags = new Set([
     'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
-    'link', 'meta', 'param', 'source', 'track', 'wbr', '!doctype'
+    'link', 'meta', 'param', 'source', 'track', 'wbr'
   ]);
 
-  tokens.forEach((line) => {
-    // Closing tag
-    if (line.match(/^<\/[\w-]+>/i)) {
-      if (indent > 0) indent--;
-      formatted += tab.repeat(indent) + line + '\n';
+  // Elements that are strictly inline
+  const inlineTags = new Set([
+    'a', 'abbr', 'b', 'bdi', 'bdo', 'cite', 'code', 'data', 'dfn',
+    'em', 'i', 'kbd', 'mark', 'q', 'rp', 'rt', 'ruby', 's', 'samp',
+    'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr'
+  ]);
+
+  // Elements where content and closing tag should stay on one line (unless containing block elements)
+  const singleLineBlockTags = new Set([
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'dt', 'dd',
+    'th', 'td', 'caption', 'label', 'legend', 'title', 'button',
+    'summary', 'figcaption', 'option'
+  ]);
+
+  // Elements where whitespace must be preserved verbatim
+  const preserveWhitespaceTags = new Set(['pre', 'textarea', 'script', 'style']);
+
+  function serializeAttributes(el) {
+    if (!el.attributes || el.attributes.length === 0) return '';
+    let attrs = '';
+    for (let i = 0; i < el.attributes.length; i++) {
+      const attr = el.attributes[i];
+      attrs += ` ${attr.name}="${attr.value.replace(/"/g, '&quot;')}"`;
     }
-    // Comment or DOCTYPE
-    else if (line.match(/^<!/i) || line.match(/^<!--/)) {
-      formatted += tab.repeat(indent) + line + '\n';
-    }
-    // Self closing XML/HTML or void tag
-    else if (line.match(/^<[\w-]+.*?\/>/)) {
-      formatted += tab.repeat(indent) + line + '\n';
-    }
-    // Single line complete tag (e.g. <h2>Title</h2>, <li>Item</li>, <p>Text</p>)
-    else if (line.match(/^<([\w-]+)(?:\s+[^>]*)?>.*<\/\1>$/i)) {
-      formatted += tab.repeat(indent) + line + '\n';
-    }
-    // Opening tag
-    else if (line.match(/^<([\w-]+)(?:\s+[^>]*)?>/i)) {
-      const match = line.match(/^<([\w-]+)/i);
-      const tag = match ? match[1].toLowerCase() : '';
-      if (voidTags.has(tag)) {
-        formatted += tab.repeat(indent) + line + '\n';
-      } else {
-        formatted += tab.repeat(indent) + line + '\n';
-        indent++;
+    return attrs;
+  }
+
+  function hasBlockChildren(el) {
+    for (let i = 0; i < el.childNodes.length; i++) {
+      const child = el.childNodes[i];
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = child.tagName.toLowerCase();
+        if (!inlineTags.has(tag)) return true;
       }
     }
-    // Content / text node
-    else {
-      formatted += tab.repeat(indent) + line + '\n';
-    }
-  });
+    return false;
+  }
 
-  return formatted.trim();
+  function formatInlineContent(el) {
+    let result = '';
+    for (let i = 0; i < el.childNodes.length; i++) {
+      const child = el.childNodes[i];
+      if (child.nodeType === Node.TEXT_NODE) {
+        result += child.nodeValue.replace(/\s+/g, ' ');
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = child.tagName.toLowerCase();
+        const attrs = serializeAttributes(child);
+        if (voidTags.has(tag)) {
+          result += `<${tag}${attrs}>`;
+        } else {
+          result += `<${tag}${attrs}>${formatInlineContent(child)}</${tag}>`;
+        }
+      } else if (child.nodeType === Node.COMMENT_NODE) {
+        result += `<!--${child.nodeValue}-->`;
+      }
+    }
+    return result;
+  }
+
+  function formatNode(node, level = 0) {
+    const indent = tab.repeat(level);
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.nodeValue.replace(/\s+/g, ' ').trim();
+      return text ? `${indent}${text}\n` : '';
+    }
+
+    if (node.nodeType === Node.COMMENT_NODE) {
+      return `${indent}<!--${node.nodeValue}-->\n`;
+    }
+
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = node.tagName.toLowerCase();
+      const attrs = serializeAttributes(node);
+
+      if (voidTags.has(tag)) {
+        return `${indent}<${tag}${attrs}>\n`;
+      }
+
+      if (preserveWhitespaceTags.has(tag)) {
+        return `${indent}<${tag}${attrs}>${node.innerHTML}</${tag}>\n`;
+      }
+
+      // Check if this is a leaf/single-line tag or element with only inline/text children
+      const containsBlock = hasBlockChildren(node);
+      const isSingleLineCandidate = singleLineBlockTags.has(tag) || (!containsBlock && node.childNodes.length > 0);
+
+      if (!containsBlock && isSingleLineCandidate) {
+        const inlineInner = formatInlineContent(node).trim();
+        if (!inlineInner) {
+          return `${indent}<${tag}${attrs}></${tag}>\n`;
+        }
+        return `${indent}<${tag}${attrs}>${inlineInner}</${tag}>\n`;
+      }
+
+      // Container element with child elements
+      let inner = '';
+      for (let i = 0; i < node.childNodes.length; i++) {
+        inner += formatNode(node.childNodes[i], level + 1);
+      }
+
+      if (!inner.trim()) {
+        return `${indent}<${tag}${attrs}></${tag}>\n`;
+      }
+
+      return `${indent}<${tag}${attrs}>\n${inner}${indent}</${tag}>\n`;
+    }
+
+    return '';
+  }
+
+  // Determine what roots to format
+  let output = '';
+
+  if (hasDocType || hasHtmlTag) {
+    if (hasDocType) {
+      output += `${docTypeStr}\n`;
+    }
+    const htmlEl = doc.documentElement;
+    const htmlAttrs = serializeAttributes(htmlEl);
+    output += `<html${htmlAttrs}>\n`;
+
+    // Head
+    const headEl = doc.head;
+    if (hasHeadTag || (headEl && headEl.childNodes.length > 0)) {
+      const headAttrs = serializeAttributes(headEl);
+      let headInner = '';
+      for (let i = 0; i < headEl.childNodes.length; i++) {
+        headInner += formatNode(headEl.childNodes[i], 2);
+      }
+      if (headInner.trim()) {
+        output += `  <head${headAttrs}>\n${headInner}  </head>\n`;
+      } else if (hasHeadTag) {
+        output += `  <head${headAttrs}></head>\n`;
+      }
+    }
+
+    // Body
+    const bodyEl = doc.body;
+    const bodyAttrs = serializeAttributes(bodyEl);
+    let bodyInner = '';
+    for (let i = 0; i < bodyEl.childNodes.length; i++) {
+      bodyInner += formatNode(bodyEl.childNodes[i], 2);
+    }
+    if (bodyInner.trim()) {
+      output += `  <body${bodyAttrs}>\n${bodyInner}  </body>\n`;
+    } else {
+      output += `  <body${bodyAttrs}></body>\n`;
+    }
+
+    output += `</html>`;
+  } else {
+    // Fragment format
+    const bodyEl = doc.body;
+    for (let i = 0; i < bodyEl.childNodes.length; i++) {
+      output += formatNode(bodyEl.childNodes[i], 0);
+    }
+  }
+
+  return output.trim();
 }
 
 // Generate localized French HTML from current state and active frame edits
