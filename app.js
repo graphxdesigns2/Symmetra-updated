@@ -1227,6 +1227,10 @@ const frPaneTitle = document.getElementById('frPaneTitle');
 const frViewVisualBtn = document.getElementById('frViewVisualBtn');
 const frViewCodeBtn = document.getElementById('frViewCodeBtn');
 const frCodeWrap = document.getElementById('frCodeWrap');
+const frCodeEditorBox = document.getElementById('frCodeEditorBox');
+const frCodeGutter = document.getElementById('frCodeGutter');
+const frCodeHighlight = document.getElementById('frCodeHighlight');
+const frCodeHighlightInner = document.getElementById('frCodeHighlightInner');
 const frCodeEditor = document.getElementById('frCodeEditor');
 const frCodeStats = document.getElementById('frCodeStats');
 const copyFrCodeBtn = document.getElementById('copyFrCodeBtn');
@@ -2826,12 +2830,81 @@ function generateFrenchHtmlSource() {
   return formatHtmlCode(rawHtml);
 }
 
-function updateFrCodeStats() {
-  if (!frCodeEditor || !frCodeStats) return;
+function highlightHtmlCode(code) {
+  if (!code) return '';
+
+  const escaped = code
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  return escaped.replace(
+    /(&lt;!--[\s\S]*?--&gt;)|(&lt;!DOCTYPE[^&]*&gt;)|(&lt;\/?)([a-zA-Z0-9:-]+)((?:\s+[a-zA-Z0-9_:-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s&>]+))?)*\s*)(\/?&gt;)/gi,
+    (match, comment, doctype, openBracket, tagName, attrs, closeBracket) => {
+      if (comment) {
+        return `<span class="hl-comment">${comment}</span>`;
+      }
+      if (doctype) {
+        return `<span class="hl-doctype">${doctype}</span>`;
+      }
+      if (openBracket && tagName) {
+        let formattedAttrs = '';
+        if (attrs) {
+          formattedAttrs = attrs.replace(
+            /([a-zA-Z0-9_:-]+)(?:(\s*=\s*)("[^"]*"|'[^']*'|[^\s&>]+))?/g,
+            (attrMatch, attrName, eq, attrVal) => {
+              let out = `<span class="hl-attr-name">${attrName}</span>`;
+              if (eq) out += `<span class="hl-punct">${eq}</span>`;
+              if (attrVal) out += `<span class="hl-attr-val">${attrVal}</span>`;
+              return out;
+            }
+          );
+        }
+        return `<span class="hl-bracket">${openBracket}</span><span class="hl-tag">${tagName}</span>${formattedAttrs}<span class="hl-bracket">${closeBracket}</span>`;
+      }
+      return match;
+    }
+  );
+}
+
+function updateFrCodeView() {
+  if (!frCodeEditor) return;
   const text = frCodeEditor.value || '';
-  const lines = text ? text.split('\n').length : 0;
+  const lines = text ? text.split('\n') : [];
+  const lineCount = lines.length || 1;
   const chars = text.length;
-  frCodeStats.textContent = `${lines} ${lines === 1 ? 'line' : 'lines'} • ${chars} chars`;
+
+  if (frCodeStats) {
+    frCodeStats.textContent = `${lineCount} ${lineCount === 1 ? 'line' : 'lines'} • ${chars} chars`;
+  }
+
+  // Update Line Numbers Gutter
+  if (frCodeGutter) {
+    let lineNumsStr = '';
+    for (let i = 1; i <= lineCount; i++) {
+      lineNumsStr += (i === 1 ? '1' : '\n' + i);
+    }
+    frCodeGutter.textContent = lineNumsStr;
+  }
+
+  // Update Syntax Highlighting
+  if (frCodeHighlightInner) {
+    const trailing = text.endsWith('\n') ? ' ' : '';
+    frCodeHighlightInner.innerHTML = highlightHtmlCode(text) + trailing;
+  }
+
+  // Synchronize Scroll
+  if (frCodeHighlight) {
+    frCodeHighlight.scrollTop = frCodeEditor.scrollTop;
+    frCodeHighlight.scrollLeft = frCodeEditor.scrollLeft;
+  }
+  if (frCodeGutter) {
+    frCodeGutter.scrollTop = frCodeEditor.scrollTop;
+  }
+}
+
+function updateFrCodeStats() {
+  updateFrCodeView();
 }
 
 function switchFrenchView(mode) {
@@ -2849,7 +2922,16 @@ function switchFrenchView(mode) {
     const htmlCode = generateFrenchHtmlSource();
     if (frCodeEditor) {
       frCodeEditor.value = htmlCode;
-      updateFrCodeStats();
+      updateFrCodeView();
+      frCodeEditor.scrollTop = 0;
+      frCodeEditor.scrollLeft = 0;
+      if (frCodeHighlight) {
+        frCodeHighlight.scrollTop = 0;
+        frCodeHighlight.scrollLeft = 0;
+      }
+      if (frCodeGutter) {
+        frCodeGutter.scrollTop = 0;
+      }
     }
     if (frPreviewFrame) frPreviewFrame.style.display = 'none';
     if (frCodeWrap) frCodeWrap.style.display = 'flex';
@@ -3129,14 +3211,24 @@ function initEventListeners() {
     formatFrCodeBtn.addEventListener('click', () => {
       if (!frCodeEditor) return;
       frCodeEditor.value = formatHtmlCode(frCodeEditor.value);
-      updateFrCodeStats();
+      updateFrCodeView();
       showToast('HTML code formatted');
     });
   }
 
   if (frCodeEditor) {
     frCodeEditor.addEventListener('input', () => {
-      updateFrCodeStats();
+      updateFrCodeView();
+    });
+
+    frCodeEditor.addEventListener('scroll', () => {
+      if (frCodeHighlight) {
+        frCodeHighlight.scrollTop = frCodeEditor.scrollTop;
+        frCodeHighlight.scrollLeft = frCodeEditor.scrollLeft;
+      }
+      if (frCodeGutter) {
+        frCodeGutter.scrollTop = frCodeEditor.scrollTop;
+      }
     });
 
     // Support tab indent in code editor
@@ -3147,7 +3239,7 @@ function initEventListeners() {
         const end = frCodeEditor.selectionEnd;
         frCodeEditor.value = frCodeEditor.value.substring(0, start) + '  ' + frCodeEditor.value.substring(end);
         frCodeEditor.selectionStart = frCodeEditor.selectionEnd = start + 2;
-        updateFrCodeStats();
+        updateFrCodeView();
       }
     });
   }

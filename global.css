@@ -1095,34 +1095,129 @@ html[data-theme="light"] #previewSection .preview-header .fr-view-btn.is-active 
   height: calc(100% - 40px);
   position: relative;
   overflow: hidden;
-  background: #0d1117;
+  background: #0b0f19;
+  display: flex;
 }
 
+/* Line Numbers Gutter */
+.fr-code-gutter {
+  min-width: 44px;
+  max-width: 64px;
+  padding: 16px 12px 16px 10px;
+  background: #070a11;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: "JetBrains Mono", "Fira Code", Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #475569;
+  text-align: right;
+  user-select: none;
+  overflow: hidden;
+  box-sizing: border-box;
+  white-space: pre;
+  flex-shrink: 0;
+}
+
+.fr-code-stage {
+  flex: 1;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: #0b0f19;
+}
+
+.fr-code-highlight,
 .fr-code-textarea {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
+  margin: 0;
   padding: 16px 20px;
   font-family: "JetBrains Mono", "Fira Code", Menlo, Monaco, Consolas, monospace;
   font-size: 13px;
   line-height: 1.65;
-  color: #e6edf3;
-  background: #0d1117;
-  border: none;
-  resize: none;
-  outline: none;
   tab-size: 2;
   white-space: pre;
   word-wrap: normal;
-  overflow: auto;
   box-sizing: border-box;
+  border: none;
+  outline: none;
+}
+
+/* Syntax Highlighting Pre Layer (Displays White Text + EN & FR Tag Colors) */
+.fr-code-highlight {
+  background: transparent;
+  color: #ffffff;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.fr-code-highlight code {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+/* Interactive Textarea Layer with Transparent Text & Visible Caret */
+.fr-code-textarea {
+  background: transparent;
+  color: transparent;
+  caret-color: #00d2ff;
+  resize: none;
+  overflow: auto;
+  z-index: 2;
 }
 
 .fr-code-textarea::selection {
-  background: rgba(56, 139, 253, 0.35);
+  background: rgba(0, 180, 216, 0.32);
+  color: transparent;
 }
 
 .fr-code-textarea:focus {
   outline: none;
+}
+
+/* HTML Syntax Highlight Color Scheme:
+   - EN Tag Colors: #00b4d8 / #00d2ff / #38bdf8 (Cyan & Sky Blue for HTML Tags & Brackets)
+   - FR Tag Colors: #c026d3 / #e879f9 / #f472b6 (Magenta & Purple for Attributes & Values)
+   - White: #ffffff for Text & Content between tags
+*/
+.hl-bracket {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.hl-tag {
+  color: #00d2ff;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(0, 210, 255, 0.2);
+}
+
+.hl-attr-name {
+  color: #e879f9;
+  font-weight: 600;
+}
+
+.hl-punct {
+  color: #c084fc;
+}
+
+.hl-attr-val {
+  color: #f472b6;
+}
+
+.hl-comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.hl-doctype {
+  color: #818cf8;
+  font-weight: 700;
 }
 
 .preview-stats-dock {

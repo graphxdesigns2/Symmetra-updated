@@ -321,13 +321,17 @@
                       </button>
                     </div>
                   </div>
-                  <div class="fr-code-editor-box">
-                    <textarea
-                      id="frCodeEditor"
-                      class="fr-code-textarea"
-                      spellcheck="false"
-                      placeholder="French HTML source code will appear here..."
-                    ></textarea>
+                  <div class="fr-code-editor-box" id="frCodeEditorBox">
+                    <div class="fr-code-gutter" id="frCodeGutter" aria-hidden="true"></div>
+                    <div class="fr-code-stage" id="frCodeStage">
+                      <pre class="fr-code-highlight" id="frCodeHighlight" aria-hidden="true"><code id="frCodeHighlightInner"></code></pre>
+                      <textarea
+                        id="frCodeEditor"
+                        class="fr-code-textarea"
+                        spellcheck="false"
+                        placeholder="French HTML source code will appear here..."
+                      ></textarea>
+                    </div>
                   </div>
                 </div>
               </div>
