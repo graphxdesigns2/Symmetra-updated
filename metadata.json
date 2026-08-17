@@ -1,0 +1,6 @@
+{
+  "name": "Symmetra",
+  "description": "Document structure alignment and French content localization tool for web pages and Word documents.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
