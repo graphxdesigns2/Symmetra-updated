@@ -169,6 +169,71 @@ function isFragmentHref(href) {
   return typeof href === 'string' && href.trim().startsWith('#');
 }
 
+function formatFrenchRootRelativeLink(rawHref) {
+  if (!rawHref || typeof rawHref !== 'string') return rawHref || '';
+  const trimmed = rawHref.trim();
+  if (!trimmed) return '';
+
+  // Preserve anchor fragments, mailto, tel, javascript, etc.
+  if (
+    trimmed.startsWith('#') ||
+    trimmed.startsWith('mailto:') ||
+    trimmed.startsWith('tel:') ||
+    trimmed.startsWith('javascript:')
+  ) {
+    return trimmed;
+  }
+
+  // 1. AEM authoring prefix + /content/canadasite/... or /content/...
+  // (e.g. https://author-canada-prod.adobecqms.net/editor.html/content/canadasite/en/...)
+  // (e.g. /editor.html/content/canadasite/en/... or /cf#/content/canadasite/en/...)
+  const aemAuthorMatch = trimmed.match(/(?:https?:\/\/[^\/]+)?(?:\/editor\.html|\/cf#)(\/content\/(?:canadasite|dam|[a-zA-Z0-9_-]+)\/.*)$/i);
+  if (aemAuthorMatch) {
+    return aemAuthorMatch[1];
+  }
+
+  // 2. Domain + /content/canadasite/... or /content/dam/... or /content/...
+  const contentMatch = trimmed.match(/(?:https?:\/\/[^\/]+)(\/content\/(?:canadasite|dam|[a-zA-Z0-9_-]+)\/.*)$/i);
+  if (contentMatch) {
+    return contentMatch[1];
+  }
+
+  // 3. Already root-relative /content/...
+  if (trimmed.startsWith('/content/')) {
+    return trimmed;
+  }
+
+  // 4. Domains (e.g. canada-preview.adobecqms.net, www.canada.ca, etc.) or relative paths with /en/ or /fr/
+  // E.g. https://canada-preview.adobecqms.net/en/health-canada/services/food-nutrition/food-safety/education.html
+  // E.g. https://www.canada.ca/en/health-canada/services/food-nutrition/food-safety/education.html
+  // E.g. /en/health-canada/services/...
+  // E.g. /fr/sante-canada/services/...
+  const langPathMatch = trimmed.match(/^(?:https?:\/\/[^\/]+)?(?:\/editor\.html|\/cf#)?\/(en|fr)(\/.*|\.html.*|\?.*|#.*|$)/i);
+  if (langPathMatch) {
+    const lang = langPathMatch[1].toLowerCase();
+    const rest = langPathMatch[2] || '';
+    return `/content/canadasite/${lang}${rest}`;
+  }
+
+  // 5. Canada.ca or adobecqms.net domain without explicit en/fr prefix
+  const gcDomainMatch = trimmed.match(/^https?:\/\/(?:[a-zA-Z0-9_.-]*canada\.ca|[a-zA-Z0-9_.-]*adobecqms\.net|[a-zA-Z0-9_.-]*gc\.ca)(\/.*)?$/i);
+  if (gcDomainMatch) {
+    const path = gcDomainMatch[1] || '';
+    if (path.startsWith('/content/')) {
+      return path;
+    }
+    if (path.match(/^\/(en|fr)(\/.*|$)/i)) {
+      return `/content/canadasite${path}`;
+    }
+    if (path) {
+      return `/content/canadasite${path}`;
+    }
+    return '/content/canadasite';
+  }
+
+  return trimmed;
+}
+
 function replaceBlockTextPreservingLinks(
   el,
   newText,
@@ -188,7 +253,7 @@ function replaceBlockTextPreservingLinks(
       if (isFragmentHref(originalHref)) return { unresolvedLinks: 0 };
       const frLink = frSpans.find((s) => s.type === 'a');
       if (frLink && frLink.href) {
-        el.setAttribute('href', frLink.href);
+        el.setAttribute('href', formatFrenchRootRelativeLink(frLink.href));
         return { unresolvedLinks: 0 };
       }
       return { unresolvedLinks: 1 };
@@ -215,7 +280,7 @@ function replaceBlockTextPreservingLinks(
       }
       const frLink = frSpans.find((s) => s.type === 'a');
       if (frLink && frLink.href) {
-        aElem.setAttribute('href', frLink.href);
+        aElem.setAttribute('href', formatFrenchRootRelativeLink(frLink.href));
         el.replaceChildren(aElem);
         return { unresolvedLinks: 0 };
       }
@@ -275,7 +340,7 @@ function replaceBlockTextPreservingLinks(
           if (span.isFragment) {
             spanEl.setAttribute('href', span.href || '#');
           } else if (span.frMatch && span.frMatch.href) {
-            spanEl.setAttribute('href', span.frMatch.href);
+            spanEl.setAttribute('href', formatFrenchRootRelativeLink(span.frMatch.href));
           } else {
             unresolved++;
           }
@@ -301,7 +366,7 @@ function replaceBlockTextPreservingLinks(
     );
     if (label) spanEl.textContent = label;
     if (span.type === 'a' && !span.isFragment && span.frMatch && span.frMatch.href) {
-      spanEl.setAttribute('href', span.frMatch.href);
+      spanEl.setAttribute('href', formatFrenchRootRelativeLink(span.frMatch.href));
     }
     el.appendChild(document.createTextNode(' '));
     el.appendChild(spanEl);
@@ -1292,6 +1357,15 @@ function parseFrDocxHtml(rawDocxHtml, filename = 'Uploaded Document.docx') {
   const parser = new DOMParser();
   const doc = parser.parseFromString('<html><body></body></html>', 'text/html');
   doc.body.innerHTML = rawDocxHtml;
+
+  // Format any links inside the French Word document DOM to root-relative
+  doc.body.querySelectorAll('a[href]').forEach((a) => {
+    const rawHref = a.getAttribute('href');
+    if (rawHref) {
+      a.setAttribute('href', formatFrenchRootRelativeLink(rawHref));
+    }
+  });
+
   const blocks = extractBlocks(doc.body);
 
   state.frDocxName = filename;
@@ -1551,6 +1625,14 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
     }
   });
 
+  // Ensure all links on the French side are formatted as root-relative
+  doc.body.querySelectorAll('a[href]').forEach((a) => {
+    const rawHref = a.getAttribute('href');
+    if (rawHref && !isFragmentHref(rawHref)) {
+      a.setAttribute('href', formatFrenchRootRelativeLink(rawHref));
+    }
+  });
+
   // NOTE: Extra French block warning section removed here to rely entirely on the Issues Panel.
 
   const isLight = state.theme === 'light';
@@ -1642,7 +1724,9 @@ function highlightIndexInFrame(frame, index) {
 
 function applyActiveHighlight() {
   highlightIndexInFrame(enPreviewFrame, state.activePreviewBlock);
-  highlightIndexInFrame(frPreviewFrame, state.activePreviewBlock);
+  if (state.autoSync && !state.syncPaused) {
+    highlightIndexInFrame(frPreviewFrame, state.activePreviewBlock + state.syncOffset);
+  }
 }
 
 function findTopIndexForFrame(frame) {
@@ -1693,16 +1777,50 @@ function scrollFrameToIndex(frame, index) {
     }
     if (!target) return;
     const max = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
-    if (items.indexOf(target) === 0 && index === 0) {
+    if (items.indexOf(target) === 0 && index <= items[0].index) {
       scrollEl.scrollTop = 0;
       return;
     }
-    if (items.indexOf(target) === items.length - 1 && index === state.enBlocks.length - 1) {
+    if (items.indexOf(target) === items.length - 1 && index >= items[items.length - 1].index) {
       scrollEl.scrollTop = max;
       return;
     }
     const destination = target.top + target.height / 2 - scrollEl.clientHeight / 2;
     scrollEl.scrollTop = Math.max(0, Math.min(destination, max));
+  } catch (_) {}
+}
+
+function stepFrameBlock(frame, stepCount) {
+  try {
+    const doc = frame.contentDocument || frame.contentWindow?.document;
+    if (!doc) return;
+    const scrollEl = doc.scrollingElement || doc.documentElement;
+    if (!scrollEl) return;
+
+    cancelSmoothFollowScroll(scrollEl);
+
+    const items = getSyncItems(frame);
+    if (!items.length) return;
+
+    const currentIdx = findTopIndexForFrame(frame);
+    let itemPos = items.findIndex((it) => it.index === currentIdx);
+    if (itemPos === -1) {
+      itemPos = stepCount > 0 ? 0 : items.length - 1;
+    }
+
+    let nextPos = itemPos + stepCount;
+    nextPos = Math.max(0, Math.min(nextPos, items.length - 1));
+
+    const nextTarget = items[nextPos];
+    if (!nextTarget) return;
+
+    scrollFrameToIndex(frame, nextTarget.index);
+    highlightIndexInFrame(frame, nextTarget.index);
+
+    if (frame === enPreviewFrame) {
+      state.activePreviewBlock = nextTarget.index;
+      updateActiveBlockHud(nextTarget.index);
+    }
   } catch (_) {}
 }
 
@@ -1719,8 +1837,9 @@ function alignPreviewBlocks(index) {
     enScroll = enDoc.scrollingElement || enDoc.documentElement;
     frScroll = frDoc.scrollingElement || frDoc.documentElement;
 
+    const frIndex = index + state.syncOffset;
     const enEl = enDoc.querySelector(`[data-swap-index="${index}"]`);
-    const frEl = frDoc.querySelector(`[data-swap-index="${index}"]`);
+    const frEl = frDoc.querySelector(`[data-swap-index="${frIndex}"]`);
 
     if (!enEl && !frEl) return;
 
@@ -1743,17 +1862,29 @@ function alignPreviewBlocks(index) {
       }
     }
 
-    if (frEl) {
-      if (index === 0 && state.syncOffset === 0) {
-        frScroll.scrollTop = 0;
-      } else if (index === state.enBlocks.length - 1 && state.syncOffset === 0) {
-        frScroll.scrollTop = Math.max(0, frScroll.scrollHeight - frScroll.clientHeight);
-      } else {
-        const frRect = frEl.getBoundingClientRect();
-        const frTop = frRect.top + frScroll.scrollTop;
-        const frMax = Math.max(0, frScroll.scrollHeight - frScroll.clientHeight);
-        const frDestination = frTop + frRect.height / 2 - frScroll.clientHeight / 2;
-        frScroll.scrollTop = Math.max(0, Math.min(frDestination, frMax));
+    if (state.autoSync && !state.syncPaused) {
+      if (frEl) {
+        if (frIndex === 0) {
+          frScroll.scrollTop = 0;
+        } else if (state.frBlocks && frIndex >= state.frBlocks.length - 1) {
+          frScroll.scrollTop = Math.max(0, frScroll.scrollHeight - frScroll.clientHeight);
+        } else {
+          const frRect = frEl.getBoundingClientRect();
+          const frTop = frRect.top + frScroll.scrollTop;
+          const frMax = Math.max(0, frScroll.scrollHeight - frScroll.clientHeight);
+          const frDestination = frTop + frRect.height / 2 - frScroll.clientHeight / 2;
+          frScroll.scrollTop = Math.max(0, Math.min(frDestination, frMax));
+        }
+      } else if (frDoc) {
+        const frItems = getSyncItems(frPreviewFrame);
+        if (frItems.length) {
+          if (frIndex <= 0) {
+            frScroll.scrollTop = 0;
+          } else {
+            const frMax = Math.max(0, frScroll.scrollHeight - frScroll.clientHeight);
+            frScroll.scrollTop = frMax;
+          }
+        }
       }
     }
 
@@ -1917,21 +2048,18 @@ function syncScroll(sourceFrame, targetFrame) {
   } catch (_) {}
 }
 
-// Wheel Navigation: 1 wheel notch = 1 block step (matches up/down arrow behavior)
+// Wheel Navigation & Independent Scroll Handling
 let wheelLock = false;
+let altWheelLock = false;
 let wheelResetTimer = null;
 let accumulatedDeltaY = 0;
+let lastHoveredFrame = null;
 
-function handleWheelNavigation(e) {
+function handleWheelNavigation(e, sourceFrameOverride = null) {
   if (!state.enBlocks || state.enBlocks.length === 0) return;
   // If in French Code View and hovering over code editor, allow native textarea scrolling
   if (state.frViewMode === 'code' && (e.target?.closest?.('#frCodeEditor') || e.target?.id === 'frCodeEditor')) {
     return;
-  }
-
-  // Prevent browser default raw pixel jumping so blocks aren't skipped
-  if (e.cancelable) {
-    e.preventDefault();
   }
 
   const rawDelta = e.deltaY;
@@ -1939,6 +2067,62 @@ function handleWheelNavigation(e) {
 
   // Normalize delta across line and pixel deltaModes
   const delta = e.deltaMode === 1 ? rawDelta * 30 : e.deltaMode === 2 ? rawDelta * 100 : rawDelta;
+
+  const isAlt = e.altKey || state.syncPaused || !state.autoSync;
+
+  // When Alt is held or Auto-sync is off, allow independent scrolling for the pane under the cursor
+  if (isAlt) {
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
+    let targetFrame = sourceFrameOverride || lastHoveredFrame;
+    if (!targetFrame) {
+      if (e.target && typeof e.target.closest === 'function') {
+        targetFrame = (e.target.closest('#frPreviewPane') || e.target.closest('#frPreviewFrame')) ? frPreviewFrame : enPreviewFrame;
+      } else {
+        targetFrame = enPreviewFrame;
+      }
+    }
+
+    if (targetFrame) {
+      // Check if it's a discrete mouse wheel notch vs continuous smooth trackpad gesture
+      const isMouseWheelNotch = e.deltaMode !== 0 || Math.abs(rawDelta) >= 40;
+      if (isMouseWheelNotch) {
+        if (altWheelLock) return;
+        altWheelLock = true;
+        const direction = delta > 0 ? 1 : -1;
+        stepFrameBlock(targetFrame, direction);
+        setTimeout(() => {
+          altWheelLock = false;
+        }, 140);
+      } else {
+        // Continuous smooth trackpad gesture
+        const doc = targetFrame.contentDocument || targetFrame.contentWindow?.document;
+        if (doc) {
+          const scrollEl = doc.scrollingElement || doc.documentElement;
+          if (scrollEl) {
+            cancelSmoothFollowScroll(scrollEl);
+            scrollEl.scrollTop += delta;
+            const topIdx = findTopIndexForFrame(targetFrame);
+            if (topIdx !== null) {
+              highlightIndexInFrame(targetFrame, topIdx);
+              if (targetFrame === enPreviewFrame) {
+                state.activePreviewBlock = topIdx;
+                updateActiveBlockHud(topIdx);
+              }
+            }
+          }
+        }
+      }
+    }
+    return;
+  }
+
+  // Prevent browser default raw pixel jumping so blocks aren't skipped
+  if (e.cancelable) {
+    e.preventDefault();
+  }
 
   accumulatedDeltaY += delta;
 
@@ -1993,11 +2177,11 @@ function setupIframeEventListeners() {
         win._symmetraScrollHandler = () => syncScroll(frame, targetFrame);
         win.addEventListener('scroll', win._symmetraScrollHandler, { passive: true });
 
-        // Wheel navigation (1 notch = 1 block down/up)
+        // Wheel navigation (1 notch = 1 block down/up, or independent scroll when Alt is held)
         if (win._symmetraWheelHandler) {
           win.removeEventListener('wheel', win._symmetraWheelHandler);
         }
-        win._symmetraWheelHandler = (e) => handleWheelNavigation(e);
+        win._symmetraWheelHandler = (e) => handleWheelNavigation(e, frame);
         win.addEventListener('wheel', win._symmetraWheelHandler, { passive: false });
 
         const doc = frame.contentDocument;
@@ -2005,16 +2189,42 @@ function setupIframeEventListeners() {
           if (doc._symmetraWheelHandler) {
             doc.removeEventListener('wheel', doc._symmetraWheelHandler);
           }
-          doc._symmetraWheelHandler = (e) => handleWheelNavigation(e);
+          doc._symmetraWheelHandler = (e) => handleWheelNavigation(e, frame);
           doc.addEventListener('wheel', doc._symmetraWheelHandler, { passive: false });
+
+          doc.addEventListener('mousemove', () => {
+            lastHoveredFrame = frame;
+          }, { passive: true });
         }
 
-        // Keyboard navigation — store reference so old handler is removed
+        // Keyboard navigation & Alt detection inside iframe
         if (win._symmetraKeyHandler) {
           win.removeEventListener('keydown', win._symmetraKeyHandler);
         }
-        win._symmetraKeyHandler = (e) => handleKeyNavigation(e);
+        win._symmetraKeyHandler = (e) => {
+          if (e.key === 'Alt') {
+            state.syncPaused = true;
+            updateSyncStatusLabel();
+          }
+          handleKeyNavigation(e);
+        };
         win.addEventListener('keydown', win._symmetraKeyHandler);
+
+        if (win._symmetraKeyUpHandler) {
+          win.removeEventListener('keyup', win._symmetraKeyUpHandler);
+        }
+        win._symmetraKeyUpHandler = (e) => {
+          if (e.key === 'Alt') {
+            state.syncPaused = false;
+            updateSyncStatusLabel();
+          }
+        };
+        win.addEventListener('keyup', win._symmetraKeyUpHandler);
+
+        win.addEventListener('blur', () => {
+          state.syncPaused = false;
+          updateSyncStatusLabel();
+        });
 
         // Focus sync — keep activePreviewBlock in sync when Tabbing inside iframe
         if (win._symmetraFocusHandler) {
@@ -2074,10 +2284,17 @@ window.addEventListener('message', (e) => {
 function nudgeSync(delta) {
   state.syncOffset += delta;
   updateSyncOffsetBadge();
-  const currentEnIndex = findTopIndexForFrame(enPreviewFrame);
-  if (currentEnIndex !== null) state.lastKnownEnIndex = currentEnIndex;
-  scrollFrameToIndex(frPreviewFrame, state.lastKnownEnIndex + state.syncOffset);
-  applyActiveHighlight();
+  const currentEnIndex = typeof state.activePreviewBlock === 'number' && state.activePreviewBlock >= 0
+    ? state.activePreviewBlock
+    : (findTopIndexForFrame(enPreviewFrame) || 0);
+  state.lastKnownEnIndex = currentEnIndex;
+  
+  if (state.autoSync && !state.syncPaused) {
+    applyActiveHighlight();
+    alignPreviewBlocks(currentEnIndex);
+  } else {
+    stepFrameBlock(frPreviewFrame, delta);
+  }
 }
 
 function updateSyncStatusLabel() {
@@ -2472,6 +2689,14 @@ function generateFrenchHtmlSource() {
     }
   });
 
+  // Ensure all links on the French side are formatted as root-relative
+  doc.body.querySelectorAll('a[href]').forEach((a) => {
+    const rawHref = a.getAttribute('href');
+    if (rawHref && !isFragmentHref(rawHref)) {
+      a.setAttribute('href', formatFrenchRootRelativeLink(rawHref));
+    }
+  });
+
   const rawHtml = hasHtmlTag ? doc.documentElement.outerHTML : doc.body.innerHTML;
   return formatHtmlCode(rawHtml);
 }
@@ -2513,15 +2738,45 @@ function switchFrenchView(mode) {
 function handleKeyNavigation(e) {
   if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
 
+  const isAlt = e.altKey || state.syncPaused || !state.autoSync;
+
   if (e.key === 'ArrowUp') {
     e.preventDefault();
-    if (state.activePreviewBlock > 0) {
-      jumpToBlock(state.activePreviewBlock - 1);
+    if (isAlt) {
+      // Step exactly 1 block up in the active / hovered pane independently
+      const targetFrame = lastHoveredFrame || (document.activeElement === frPreviewFrame ? frPreviewFrame : enPreviewFrame);
+      stepFrameBlock(targetFrame, -1);
+    } else {
+      if (state.activePreviewBlock > 0) {
+        jumpToBlock(state.activePreviewBlock - 1);
+      }
     }
   } else if (e.key === 'ArrowDown') {
     e.preventDefault();
-    if (state.activePreviewBlock < state.enBlocks.length - 1) {
-      jumpToBlock(state.activePreviewBlock + 1);
+    if (isAlt) {
+      // Step exactly 1 block down in the active / hovered pane independently
+      const targetFrame = lastHoveredFrame || (document.activeElement === frPreviewFrame ? frPreviewFrame : enPreviewFrame);
+      stepFrameBlock(targetFrame, 1);
+    } else {
+      if (state.activePreviewBlock < state.enBlocks.length - 1) {
+        jumpToBlock(state.activePreviewBlock + 1);
+      }
+    }
+  } else if (e.key === 'PageUp') {
+    e.preventDefault();
+    if (isAlt) {
+      const targetFrame = lastHoveredFrame || (document.activeElement === frPreviewFrame ? frPreviewFrame : enPreviewFrame);
+      stepFrameBlock(targetFrame, -5);
+    } else {
+      jumpToBlock(Math.max(0, state.activePreviewBlock - 5));
+    }
+  } else if (e.key === 'PageDown') {
+    e.preventDefault();
+    if (isAlt) {
+      const targetFrame = lastHoveredFrame || (document.activeElement === frPreviewFrame ? frPreviewFrame : enPreviewFrame);
+      stepFrameBlock(targetFrame, 5);
+    } else {
+      jumpToBlock(Math.min(state.enBlocks.length - 1, state.activePreviewBlock + 5));
     }
   } else if (e.key === '[') {
     e.preventDefault();
@@ -2670,6 +2925,13 @@ function initEventListeners() {
     toggleAutoSync.classList.toggle('is-active', state.autoSync);
     toggleAutoSync.querySelector('span').textContent = state.autoSync ? 'Auto-sync on' : 'Auto-sync off';
     updateSyncStatusLabel();
+    if (state.autoSync) {
+      applyActiveHighlight();
+      alignPreviewBlocks(state.activePreviewBlock);
+      showToast('Auto-sync enabled');
+    } else {
+      showToast('Auto-sync disabled — panes scroll independently');
+    }
   });
 
   rightBack.addEventListener('click', () => {
@@ -2683,8 +2945,9 @@ function initEventListeners() {
   resetSyncOffset.addEventListener('click', () => {
     state.syncOffset = 0;
     updateSyncOffsetBadge();
-    nudgeSync(0);
-    showToast('Sync offset reset');
+    applyActiveHighlight();
+    alignPreviewBlocks(state.activePreviewBlock);
+    showToast('Sync offset reset to 0');
   });
 
   // French Pane View Toggle (Visual vs Code)
@@ -2838,6 +3101,18 @@ function initEventListeners() {
     }
   });
 
+  // Hover tracking for independent scrolling
+  const enPaneEl = document.querySelector('.preview-pane:first-child');
+  const frPaneEl = document.getElementById('frPreviewPane');
+  if (enPaneEl) {
+    enPaneEl.addEventListener('mouseenter', () => { lastHoveredFrame = enPreviewFrame; });
+    enPaneEl.addEventListener('mousemove', () => { lastHoveredFrame = enPreviewFrame; });
+  }
+  if (frPaneEl) {
+    frPaneEl.addEventListener('mouseenter', () => { lastHoveredFrame = frPreviewFrame; });
+    frPaneEl.addEventListener('mousemove', () => { lastHoveredFrame = frPreviewFrame; });
+  }
+
   // Workspace Wheel Navigation (1 notch = 1 block step when cursor is over preview area)
   const workspaceEl = document.getElementById('workspace');
   if (workspaceEl) {
@@ -2858,6 +3133,11 @@ function initEventListeners() {
       state.syncPaused = false;
       updateSyncStatusLabel();
     }
+  });
+
+  window.addEventListener('blur', () => {
+    state.syncPaused = false;
+    updateSyncStatusLabel();
   });
 }
 
