@@ -1,3 +1,3 @@
-npm config set strict-ssl false
-npm i
-npm config set strict-ssl true
+<p>npm config set strict-ssl false<br>
+npm i<br>
+npm config set strict-ssl true</p>
