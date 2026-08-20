@@ -41,7 +41,7 @@ const SAMPLE_FR_DOCX_HTML = `<h2>Prestations d'assurance-emploi et congés</h2>
 
 // Symmetra Core Constants & Logic
 const BLOCK_SELECTOR =
-  'h2,h3,h4,h5,h6,p,li,dt,dd,td,th,figcaption,blockquote,caption,summary,img[alt],input[placeholder],input[aria-label],textarea[placeholder],button[aria-label]';
+  'h1,h2,h3,h4,h5,h6,p,li,dt,dd,td,th,figcaption,blockquote,caption,summary,img[alt],input[placeholder],input[aria-label],textarea[placeholder],button[aria-label],.alert,section.alert,div.alert,aside.alert,.well,.panel-body';
 
 const SPAN_TAGS = ['a', 'strong', 'b', 'em', 'i'];
 
@@ -51,10 +51,52 @@ function spanType(tag) {
   return 'em';
 }
 
+function isFootnoteBoilerplateElement(el) {
+  if (!el || !el.tagName) return false;
+  const tag = el.tagName.toLowerCase();
+
+  // 1. <dt> inside a footnote list: e.g. <dt>Footnote 1</dt> or <dt>Note de bas de page 1</dt>
+  if (tag === 'dt') {
+    if (el.closest('.wb-fnote, [role="note"]') || el.closest('dl')?.querySelector('dd[id^="fn"]')) {
+      return true;
+    }
+    if (/^(?:Footnote|Note\s+de\s+bas\s+de\s+page)\s*[a-zA-Z0-9_-]+/i.test((el.textContent || '').trim())) {
+      return true;
+    }
+  }
+
+  // 2. Return link element with class fn-rtn
+  if (el.classList.contains('fn-rtn') || el.closest('.fn-rtn')) {
+    return true;
+  }
+
+  // 3. <a> link pointing to footnote reference (-rf)
+  if (tag === 'a' && ((el.getAttribute('href') || '').includes('-rf') || el.classList.contains('fn-rtn'))) {
+    return true;
+  }
+
+  // 4. Standalone element whose text ONLY consists of return link boilerplate
+  const txt = (el.textContent || '').trim();
+  if (/^(?:Return to footnote|Retour à la référence de la note de bas de page)\s*[a-zA-Z0-9_-]*(?:\s*referrer)?$/i.test(txt)) {
+    return true;
+  }
+
+  // 5. In-text footnote superscript or link
+  if (isFootnoteElement(el)) {
+    return true;
+  }
+
+  return false;
+}
+
 function isLeafBlock(el) {
   const tagName = el.tagName.toLowerCase();
   if (['img', 'input', 'textarea', 'button'].includes(tagName)) return true;
-  return !el.querySelector(BLOCK_SELECTOR);
+  // If it contains child blocks, check if those child blocks are actual content blocks (not just boilerplate)
+  const childBlocks = Array.from(el.querySelectorAll(BLOCK_SELECTOR)).filter(
+    (child) => child !== el && !isFootnoteBoilerplateElement(child)
+  );
+  return childBlocks.length === 0;
 }
 
 function isClassificationMarking(text) {
@@ -85,6 +127,127 @@ function isPlainUrlText(text) {
   return /^(https?:\/\/\S+|www\.\S+)$/i.test(t);
 }
 
+function isFootnoteElement(el) {
+  if (!el || !el.tagName) return false;
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'sup') {
+    return !!el.querySelector('a.fn-lnk, a[href*="#fn"]');
+  }
+  if (tag === 'a') {
+    if (el.classList.contains('fn-lnk') || el.classList.contains('fn-rtn')) return true;
+    const href = el.getAttribute('href') || '';
+    if (href.startsWith('#fn') || href.includes('-rf')) return true;
+    if (el.closest('sup')) return true;
+  }
+  return false;
+}
+
+function extractBlockFootnotes(el) {
+  const footnotes = [];
+  const fnLinks = Array.from(
+    el.querySelectorAll('sup a.fn-lnk, a.fn-lnk, sup > a[href*="#fn"]:not([href*="-rf"]), a[href*="#fn"]:not([href*="-rf"])')
+  ).filter((a) => !a.classList.contains('fn-rtn') && !a.closest('.fn-rtn') && !(a.getAttribute('href') || '').includes('-rf'));
+
+  fnLinks.forEach((a) => {
+    const href = a.getAttribute('href') || '';
+    const numMatch = href.match(/#fn([a-zA-Z0-9_-]+)/i) || a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/);
+    const fnNum = numMatch ? numMatch[1] : '1';
+    const sup = a.closest('sup');
+    const supId = sup?.getAttribute('id') || a.getAttribute('id') || '';
+    const cleanHref = href || `#fn${fnNum}`;
+
+    footnotes.push({
+      fnNum,
+      href: cleanHref,
+      id: supId,
+    });
+  });
+
+  return footnotes;
+}
+
+function createFrenchFootnoteNode(fn) {
+  const supEl = document.createElement('sup');
+  if (fn.id) supEl.setAttribute('id', fn.id);
+  const aEl = document.createElement('a');
+  aEl.className = 'fn-lnk';
+  aEl.setAttribute('href', fn.href || `#fn${fn.fnNum}`);
+  const spanEl = document.createElement('span');
+  spanEl.className = 'wb-inv';
+  spanEl.textContent = 'Note de bas de page ';
+  aEl.appendChild(spanEl);
+  aEl.appendChild(document.createTextNode(String(fn.fnNum)));
+  supEl.appendChild(aEl);
+  return supEl;
+}
+
+function convertFootnotesToFrenchInHtml(html) {
+  if (!html) return html;
+  return html
+    // 1. In-text footnote links with <sup> wrapper
+    .replace(
+      /<sup(\s+id="[^"]*")?>\s*<a\s+class="fn-lnk"\s+href="#fn([a-zA-Z0-9_-]+)"([^>]*)>\s*<span\s+class="wb-inv">\s*Footnote\s*<\/span>\s*([a-zA-Z0-9_-]+)\s*<\/a>\s*<\/sup>/gi,
+      (match, supId, hrefNum, extraAttrs, textNum) => {
+        return `<sup${supId || ''}><a class="fn-lnk" href="#fn${hrefNum}"${extraAttrs || ''}><span class="wb-inv">Note de bas de page </span>${textNum}</a></sup>`;
+      }
+    )
+    // 2. In-text footnote link without <sup> wrapper
+    .replace(
+      /<a\s+class="fn-lnk"\s+href="#fn([a-zA-Z0-9_-]+)"([^>]*)>\s*<span\s+class="wb-inv">\s*Footnote\s*<\/span>\s*([a-zA-Z0-9_-]+)\s*<\/a>/gi,
+      (match, hrefNum, extraAttrs, textNum) => {
+        return `<sup><a class="fn-lnk" href="#fn${hrefNum}"${extraAttrs || ''}><span class="wb-inv">Note de bas de page </span>${textNum}</a></sup>`;
+      }
+    )
+    // 3. Return to footnote referrer links (handles full Canada.ca WET return link)
+    .replace(
+      /<a(\s+[^>]*?)href="#fn([a-zA-Z0-9_-]+)-rf"([^>]*)>([\s\S]*?)<\/a>/gi,
+      (match, beforeHref, hrefNum, afterHref, innerText) => {
+        return `<a${beforeHref}href="#fn${hrefNum}-rf"${afterHref}><span class="wb-inv">Retour à la référence de la note de bas de page </span>${hrefNum}</a>`;
+      }
+    )
+    // 4. Definition terms in footnotes section: <dt>Footnote 1</dt> -> <dt>Note de bas de page 1</dt>
+    .replace(
+      /<dt(\s+[^>]*)?>\s*(?:Footnote|Note\s+de\s+bas\s+de\s+page)\s*([a-zA-Z0-9_-]+)\s*<\/dt>/gi,
+      '<dt$1>Note de bas de page $2</dt>'
+    )
+    // 5. Footnotes heading: <h2 id="fn">Footnotes</h2> -> <h2 id="fn">Notes de bas de page</h2>
+    .replace(
+      /<h([1-6])(\s+[^>]*?id="fn"[^>]*)>\s*(?:Footnotes?|Notes?\s+de\s+bas\s+de\s+page)\s*<\/h\1>/gi,
+      '<h$1$2>Notes de bas de page</h$1>'
+    )
+    .replace(
+      /<h([1-6])(\s+[^>]*)?>\s*Footnotes\s*<\/h\1>/gi,
+      '<h$1$2>Notes de bas de page</h$1>'
+    );
+}
+
+function cleanThTags(root) {
+  if (!root) return;
+  const thElements = root.querySelectorAll ? root.querySelectorAll('th') : [];
+  thElements.forEach((th) => {
+    th.querySelectorAll('strong, b').forEach((boldEl) => {
+      const parent = boldEl.parentNode;
+      if (parent) {
+        while (boldEl.firstChild) {
+          parent.insertBefore(boldEl.firstChild, boldEl);
+        }
+        parent.removeChild(boldEl);
+      }
+    });
+  });
+}
+
+function cleanFrenchHtmlPostProcess(html) {
+  if (!html) return html;
+  let res = convertFootnotesToFrenchInHtml(html);
+  // Ensure no <strong> or <b> tags inside <th> tags in HTML string output
+  res = res.replace(/<th(\s+[^>]*)?>([\s\S]*?)<\/th>/gi, (match, thAttrs, inner) => {
+    const cleanedInner = inner.replace(/<\/?(strong|b)(\s+[^>]*)?>/gi, '');
+    return `<th${thAttrs || ''}>${cleanedInner}</th>`;
+  });
+  return res;
+}
+
 function getBlockContent(el) {
   const tag = el.tagName.toLowerCase();
   if (tag === 'img') return el.getAttribute('alt') || '';
@@ -92,6 +255,17 @@ function getBlockContent(el) {
     return el.getAttribute('placeholder') || '';
   if (['input', 'button'].includes(tag) && el.hasAttribute('aria-label'))
     return el.getAttribute('aria-label') || '';
+  
+  if (el.querySelector('.wb-inv, a.fn-lnk, sup > a.fn-lnk, .fn-rtn, a[href*="-rf"]')) {
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('.fn-rtn, a[href*="-rf"]').forEach((rtn) => rtn.remove());
+    clone.querySelectorAll('.wb-inv').forEach((inv) => {
+      if (/Footnote|Note de bas de page|Return to footnote|Retour à la référence/i.test(inv.textContent)) {
+        inv.remove();
+      }
+    });
+    return (clone.textContent || '').replace(/\s+/g, ' ').trim();
+  }
   return (el.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
@@ -106,6 +280,7 @@ function applyFrenchTypographyRules(text) {
 function extractBlockSpans(el) {
   const tag = el.tagName.toLowerCase();
   if (SPAN_TAGS.includes(tag)) {
+    if (isFootnoteElement(el)) return [];
     const type = spanType(tag);
     return [
       {
@@ -115,7 +290,9 @@ function extractBlockSpans(el) {
       },
     ];
   }
-  const found = Array.from(el.querySelectorAll(SPAN_TAGS.join(', ')));
+  const found = Array.from(el.querySelectorAll(SPAN_TAGS.join(', '))).filter(
+    (n) => !isFootnoteElement(n)
+  );
   const foundSet = new Set(found);
   const topLevel = found.filter((n) => {
     let p = n.parentElement;
@@ -140,7 +317,7 @@ function extractBlockSpans(el) {
 function extractBlocks(rootEl) {
   const all = Array.from(rootEl.querySelectorAll(BLOCK_SELECTOR));
   return all
-    .filter((el) => isLeafBlock(el))
+    .filter((el) => isLeafBlock(el) && !isFootnoteBoilerplateElement(el))
     .map((el) => {
       const tag = el.tagName.toLowerCase();
       let attrTarget = 'text';
@@ -148,12 +325,15 @@ function extractBlocks(rootEl) {
       else if (['input', 'textarea'].includes(tag) && el.hasAttribute('placeholder'))
         attrTarget = 'placeholder';
       else if (el.hasAttribute('aria-label')) attrTarget = 'aria-label';
+      const brCount = el.querySelectorAll('br').length;
       return {
         el,
         tag,
         attrTarget,
         text: getBlockContent(el),
         spans: extractBlockSpans(el),
+        hasBr: brCount > 0,
+        brCount,
       };
     })
     .filter((b) => b.text.length > 0)
@@ -169,6 +349,21 @@ function isFragmentHref(href) {
   return typeof href === 'string' && href.trim().startsWith('#');
 }
 
+function isNodeHref(href) {
+  if (!href || typeof href !== 'string') return false;
+  const trimmed = href.trim();
+  return (
+    /(?:^|\/|\.)(en|fr)\/node(?:\/|\.html|\?|#|$)/i.test(trimmed) ||
+    trimmed.includes('/en/node/') ||
+    trimmed.includes('/fr/node/')
+  );
+}
+
+function convertNodeHrefToFrench(href) {
+  if (!href || typeof href !== 'string') return '';
+  return formatFrenchRootRelativeLink(href);
+}
+
 function formatFrenchRootRelativeLink(rawHref) {
   if (!rawHref || typeof rawHref !== 'string') return rawHref || '';
   const trimmed = rawHref.trim();
@@ -181,6 +376,19 @@ function formatFrenchRootRelativeLink(rawHref) {
     trimmed.startsWith('tel:') ||
     trimmed.startsWith('javascript:')
   ) {
+    return trimmed;
+  }
+
+  // 0. Node links (e.g. /en/node/11022 -> /fr/node/11022, https://www.canada.ca/en/node/11022 -> /fr/node/11022)
+  const nodeMatch = trimmed.match(/^(?:https?:\/\/[^\/]+)?(?:\/editor\.html|\/cf#)?\/?(en|fr)\/node(\/.*|\.html.*|\?.*|#.*|$)/i);
+  if (nodeMatch) {
+    const rest = nodeMatch[2] || '';
+    return `/fr/node${rest}`;
+  }
+  if (trimmed.includes('/en/node/')) {
+    return trimmed.replace(/\/en\/node\//gi, '/fr/node/');
+  }
+  if (trimmed.startsWith('/fr/node/')) {
     return trimmed;
   }
 
@@ -245,13 +453,32 @@ function replaceBlockTextPreservingLinks(
     el.setAttribute(attrTarget, newText);
     return { unresolvedLinks: 0 };
   }
+
   const blockTag = el.tagName.toLowerCase();
+  const isTh = blockTag === 'th' || el.tagName.toLowerCase() === 'th' || Boolean(el.closest('th'));
+
+  // If this is a footnote content element inside a definition list, strip leading number labels like "1. ", "1 - ", "1) ", "[1] ", "Note 1 : "
+  const isFootnoteItem = Boolean(el.closest('dd[id^="fn"], .wb-fnote dl, [role="note"] dl'));
+  if (isFootnoteItem && newText) {
+    const stripped = newText.replace(/^(?:(?:\(|\[)?\s*\d+\s*(?:\)|\])?\s*[:.\-–—]?\s*|\bNote(?:\s+de\s+bas\s+de\s+page)?\s*\d+\s*[:.\-–—]?\s*)/i, '').trim();
+    if (stripped) {
+      newText = stripped;
+    }
+  }
+
+  // Extract any footnotes from English element before modifying children
+  const blockFootnotes = extractBlockFootnotes(el);
+
   if (SPAN_TAGS.includes(blockTag)) {
     if (blockTag === 'a') {
       const originalHref = el.getAttribute('href') || '';
       el.textContent = newText;
       if (isFragmentHref(originalHref)) return { unresolvedLinks: 0 };
-      const frLink = frSpans.find((s) => s.type === 'a');
+      if (isNodeHref(originalHref)) {
+        el.setAttribute('href', convertNodeHrefToFrench(originalHref));
+        return { unresolvedLinks: 0 };
+      }
+      const frLink = (frSpans || []).find((s) => s.type === 'a');
       if (frLink && frLink.href) {
         el.setAttribute('href', formatFrenchRootRelativeLink(frLink.href));
         return { unresolvedLinks: 0 };
@@ -261,16 +488,15 @@ function replaceBlockTextPreservingLinks(
     el.textContent = newText;
     return { unresolvedLinks: 0 };
   }
+
   const oldSpans = extractBlockSpans(el);
-  if (!oldSpans.length) {
-    el.textContent = newText;
-    return { unresolvedLinks: 0 };
-  }
+
+  // If the whole English block was wrapped in a single <strong>, <b>, <em>, or <i>
   const originalText = (el.textContent || '').replace(/\s+/g, ' ').trim();
-  if (oldSpans.length === 1 && originalText === oldSpans[0].text) {
+  if (oldSpans.length === 1 && originalText === oldSpans[0].text && blockFootnotes.length === 0) {
     const span = oldSpans[0];
     if (span.type === 'a') {
-      const originalHref = el.querySelector('a')?.getAttribute('href') || '';
+      const originalHref = span.href || el.querySelector('a')?.getAttribute('href') || '';
       const aElem = document.createElement('a');
       aElem.textContent = newText;
       if (isFragmentHref(originalHref)) {
@@ -278,7 +504,12 @@ function replaceBlockTextPreservingLinks(
         el.replaceChildren(aElem);
         return { unresolvedLinks: 0 };
       }
-      const frLink = frSpans.find((s) => s.type === 'a');
+      if (isNodeHref(originalHref)) {
+        aElem.setAttribute('href', convertNodeHrefToFrench(originalHref));
+        el.replaceChildren(aElem);
+        return { unresolvedLinks: 0 };
+      }
+      const frLink = (frSpans || []).find((s) => s.type === 'a');
       if (frLink && frLink.href) {
         aElem.setAttribute('href', formatFrenchRootRelativeLink(frLink.href));
         el.replaceChildren(aElem);
@@ -287,98 +518,266 @@ function replaceBlockTextPreservingLinks(
       el.replaceChildren(document.createTextNode(newText));
       return { unresolvedLinks: 1 };
     }
+
+    // The entire English block is styled with <strong>, <b>, <em>, or <i>
+    // For <th> headers, do not output <strong> tags as <th> is already inherently bold
+    if (isTh && span.type === 'strong') {
+      el.replaceChildren(document.createTextNode(newText));
+      return { unresolvedLinks: 0 };
+    }
+
+    // Replicate the exact English container emphasis so the entire French paragraph is bolded/italicized
     const tagElem = document.createElement(span.type === 'strong' ? 'strong' : 'em');
-    tagElem.textContent = newText;
+    const frLinks = (frSpans || []).filter((s) => s.type === 'a' && s.href);
+    if (frLinks.length > 0) {
+      replaceBlockTextPreservingLinks(tagElem, newText, 'text', frSpans);
+    } else {
+      tagElem.textContent = newText;
+    }
     el.replaceChildren(tagElem);
     return { unresolvedLinks: 0 };
   }
 
-  const typeCounters = {};
-  const spansMeta = oldSpans.map((span) => {
-    const n = typeCounters[span.type] || 0;
-    const sameTypeFr = frSpans.filter((s) => s.type === span.type);
-    const frMatch = sameTypeFr[n] || null;
-    typeCounters[span.type] = n + 1;
-    const origA = el.querySelector(`a`);
-    const isFrag = span.type === 'a' && isFragmentHref(origA?.getAttribute('href') || '');
-    return {
-      ...span,
-      frMatch,
-      isFragment: isFrag,
-      matchedText: '',
-    };
-  });
+  // Determine spans to apply:
+  // Preference 1: Explicit spans from French Word document (frSpans)
+  let activeSpans = [];
+  let unresolvedLinks = 0;
 
-  const placeholders = spansMeta.map((_, i) => `___GC_SPAN_${i}___`);
-  let rebuilt = newText;
-  spansMeta.forEach((span, i) => {
-    const candidates = [span.frMatch && span.frMatch.text, span.text].filter(Boolean);
-    for (const candidate of candidates) {
-      const escaped = escapeRegExp(candidate);
-      const regex = new RegExp(escaped, 'i');
-      if (regex.test(rebuilt)) {
-        rebuilt = rebuilt.replace(regex, placeholders[i]);
-        span.matchedText = candidate;
-        break;
+  if (frSpans && frSpans.length > 0) {
+    const enLinks = oldSpans.filter((s) => s.type === 'a');
+    let enLinkIdx = 0;
+
+    frSpans.forEach((fs) => {
+      if (!fs.text) return;
+      let href = fs.href || '';
+      let isFragment = isFragmentHref(href);
+      let isNode = isNodeHref(href);
+
+      if (fs.type === 'a') {
+        if (!href && enLinks[enLinkIdx]) {
+          const enHref = enLinks[enLinkIdx].href || '';
+          if (isFragmentHref(enHref)) {
+            href = enHref;
+            isFragment = true;
+          } else if (isNodeHref(enHref)) {
+            href = convertNodeHrefToFrench(enHref);
+            isNode = true;
+          } else {
+            href = enHref;
+          }
+          enLinkIdx++;
+        }
       }
+
+      activeSpans.push({
+        type: fs.type,
+        text: fs.text,
+        href,
+        isFragment,
+        isNodeLink: isNode,
+      });
+    });
+  }
+
+  // Disallow bold (<strong>) spans inside <th> cells
+  if (isTh) {
+    activeSpans = activeSpans.filter((s) => s.type !== 'strong');
+  }
+
+  // Carry over leading bold prefix if English starts with bold label (e.g. <strong>Note:</strong> or <strong>Important:</strong>)
+  // and the French translation begins with a corresponding label (e.g. "Remarque :", "Note :", "Avertissement :")
+  if (!isTh) {
+    const leadingEnStrong = oldSpans.find(
+      (s) =>
+        s.type === 'strong' &&
+        (originalText.startsWith(s.text) ||
+          originalText.startsWith(s.text + ':') ||
+          originalText.startsWith(s.text + ' :') ||
+          /^[A-Za-z\s]{1,30}:/.test(s.text))
+    );
+    if (leadingEnStrong) {
+      const hasLeadingFrSpan = activeSpans.some((s) => newText.startsWith(s.text));
+      if (!hasLeadingFrSpan) {
+        const frPrefixMatch = newText.match(/^([A-Za-zÀ-ÖØ-öø-ÿ\s'’()\-–—]{1,40}\s*[:：])/);
+        if (frPrefixMatch && frPrefixMatch[1]) {
+          activeSpans.unshift({
+            type: 'strong',
+            text: frPrefixMatch[1].trim(),
+          });
+        }
+      }
+    }
+  }
+
+  // Count unresolved links if English had more links than French Word document provided
+  const enLinksCount = oldSpans.filter((s) => s.type === 'a').length;
+  const frLinksCount = (frSpans || []).filter((s) => s.type === 'a').length;
+  if (enLinksCount > frLinksCount) {
+    unresolvedLinks += (enLinksCount - frLinksCount);
+  }
+
+  // Rebuild text with footnote placeholders if footnotes exist
+  let rebuilt = newText;
+  if (blockFootnotes.length > 0) {
+    blockFootnotes.forEach((fn, fIdx) => {
+      const fnNum = fn.fnNum;
+      const fnEscaped = escapeRegExp(fnNum);
+      const pureNum = fnNum.replace(/^fn[-_]?/i, '');
+      const pureNumEscaped = escapeRegExp(pureNum);
+      const posEscaped = escapeRegExp(String(fIdx + 1));
+
+      const numPatterns = [fnEscaped];
+      if (pureNum && pureNum !== fnNum && !numPatterns.includes(pureNumEscaped)) {
+        numPatterns.push(pureNumEscaped);
+      }
+      if (posEscaped && !numPatterns.includes(posEscaped)) {
+        numPatterns.push(posEscaped);
+      }
+      const patternOr = numPatterns.join('|');
+
+      const fnRegex = new RegExp(
+        `(?:\\s*\\{\\s*(?:fn[-_]?|#fn[-_]?|Note\\s*(?:de\\s+bas\\s+de\\s+page)?\\s*)?(?:${patternOr})\\s*\\}|` +
+        `\\s*\\[\\s*(?:fn[-_]?|#fn[-_]?|Note\\s*(?:de\\s+bas\\s+de\\s+page)?\\s*)?(?:${patternOr})\\s*\\]|` +
+        `\\s*\\(\\s*(?:fn[-_]?|#fn[-_]?|Note\\s*(?:de\\s+bas\\s+de\\s+page)?\\s*)?(?:${patternOr})\\s*\\)|` +
+        `\\s*\\b(?:Note(?:\\s+de\\s+bas\\s+de\\s+page)?|Footnote)\\s*(?:${patternOr})\\b(?:\\s*[.:])?)`,
+        'i'
+      );
+      if (fnRegex.test(rebuilt)) {
+        rebuilt = rebuilt.replace(fnRegex, `___GC_FN_${fIdx}___`);
+      } else {
+        rebuilt = rebuilt + `___GC_FN_${fIdx}___`;
+      }
+    });
+  }
+
+  // If no active spans and no footnotes to apply, simply set textContent
+  if (activeSpans.length === 0 && blockFootnotes.length === 0) {
+    el.replaceChildren(document.createTextNode(newText));
+    if (isTh) cleanThTags(el);
+    return { unresolvedLinks };
+  }
+
+  // Replace activeSpans inside rebuilt using placeholders
+  const spanPlaceholders = activeSpans.map((_, i) => `___GC_SPAN_${i}___`);
+  const matchedSpanIndexes = [];
+
+  // Sort by length descending to match longest phrases first
+  const sortedIndices = activeSpans
+    .map((_, i) => i)
+    .sort((a, b) => activeSpans[b].text.length - activeSpans[a].text.length);
+
+  sortedIndices.forEach((i) => {
+    const span = activeSpans[i];
+    const escaped = escapeRegExp(span.text);
+    const regex = new RegExp(escaped, 'i');
+    if (regex.test(rebuilt)) {
+      rebuilt = rebuilt.replace(regex, spanPlaceholders[i]);
+      matchedSpanIndexes.push(i);
     }
   });
 
-  if (spansMeta.every((_, i) => rebuilt.includes(placeholders[i]))) {
+  if (matchedSpanIndexes.length > 0 || blockFootnotes.length > 0) {
     el.replaceChildren();
-    const parts = rebuilt.split(/(___GC_SPAN_\d+___)/g);
-    let unresolved = 0;
+    const parts = rebuilt.split(/(___GC_SPAN_\d+___|___GC_FN_\d+___)/g);
     parts.forEach((part) => {
-      const match = part.match(/^___GC_SPAN_(\d+)___$/);
-      if (match) {
-        const span = spansMeta[parseInt(match[1], 10)];
+      const spanMatch = part.match(/^___GC_SPAN_(\d+)___$/);
+      const fnMatch = part.match(/^___GC_FN_(\d+)___$/);
+      if (spanMatch) {
+        const spanIndex = parseInt(spanMatch[1], 10);
+        const span = activeSpans[spanIndex];
         const spanEl = document.createElement(
           span.type === 'a' ? 'a' : span.type === 'strong' ? 'strong' : 'em'
         );
-        spanEl.textContent = span.matchedText || span.text;
+        spanEl.textContent = span.text;
         if (span.type === 'a') {
           if (span.isFragment) {
             spanEl.setAttribute('href', span.href || '#');
-          } else if (span.frMatch && span.frMatch.href) {
-            spanEl.setAttribute('href', formatFrenchRootRelativeLink(span.frMatch.href));
-          } else {
-            unresolved++;
+          } else if (span.isNodeLink) {
+            spanEl.setAttribute('href', convertNodeHrefToFrench(span.href));
+          } else if (span.href) {
+            spanEl.setAttribute('href', formatFrenchRootRelativeLink(span.href));
           }
         }
         el.appendChild(spanEl);
+      } else if (fnMatch) {
+        const fnIndex = parseInt(fnMatch[1], 10);
+        const fn = blockFootnotes[fnIndex];
+        if (fn) {
+          el.appendChild(createFrenchFootnoteNode(fn));
+        }
       } else if (part) {
         el.appendChild(document.createTextNode(part));
       }
     });
-    return { unresolvedLinks: unresolved };
+    if (isTh) cleanThTags(el);
+    return { unresolvedLinks };
   }
 
+  // Fallback: render clean text without appending any stray English spans
   el.replaceChildren(document.createTextNode(newText));
-  let unresolved = 0;
-  spansMeta.forEach((span) => {
-    if (span.type === 'a' && !span.isFragment && !(span.frMatch && span.frMatch.href)) {
-      unresolved++;
-      return;
-    }
-    const label = span.matchedText || (span.frMatch && span.frMatch.text) || span.text;
-    const spanEl = document.createElement(
-      span.type === 'a' ? 'a' : span.type === 'strong' ? 'strong' : 'em'
-    );
-    if (label) spanEl.textContent = label;
-    if (span.type === 'a' && !span.isFragment && span.frMatch && span.frMatch.href) {
-      spanEl.setAttribute('href', formatFrenchRootRelativeLink(span.frMatch.href));
-    }
-    el.appendChild(document.createTextNode(' '));
-    el.appendChild(spanEl);
-  });
-  return { unresolvedLinks: unresolved };
+  if (isTh) cleanThTags(el);
+  return { unresolvedLinks };
 }
 
-function alignByTag(enTags, frTags) {
+function isFootnoteHeadingBlock(block) {
+  if (!block) return false;
+  if (block.el && (block.el.id === 'fn' || block.el.closest('#fn') || (block.el.closest('.wb-fnote, [role="note"]') && isHeadingTag(block.tag)))) {
+    return true;
+  }
+  return /^\s*(?:Footnotes?|Notes?\s+de\s+bas\s+de\s+page)\s*[:：]?\s*$/i.test((block.text || '').trim());
+}
+
+function isFootnoteContentBlock(block, allBlocks = []) {
+  if (!block) return false;
+  // 1. Inside English/WET footnote container (dd or dl inside .wb-fnote)
+  if (block.el && block.el.closest('dd[id^="fn"], .wb-fnote dl, [role="note"] dl, dl.fnote')) {
+    return true;
+  }
+  // 2. Starts with a footnote prefix like "1. ", "1 - ", "[1] ", "(1)", "1) ", "Note 1 : ", "Note de bas de page 1"
+  if (/^\s*(?:(?:\(|\[)?\s*\d+\s*(?:\)|\])?\s*[:.\-–—\)]|\bNote(?:\s+de\s+bas\s+de\s+page)?\s*\d+\s*[:.\-–—\)]?)/i.test((block.text || '').trim())) {
+    return true;
+  }
+  // 3. If it is located after a footnote heading in the document's block list
+  if (allBlocks && allBlocks.length > 0) {
+    const idx = allBlocks.indexOf(block);
+    if (idx > 0) {
+      for (let k = idx - 1; k >= 0; k--) {
+        if (isFootnoteHeadingBlock(allBlocks[k])) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function getBlockMatchScore(enTag, frTag, enBlock, frBlock, enBlocks = [], frBlocks = []) {
+  if (enBlock && frBlock) {
+    const enIsFnHeader = isFootnoteHeadingBlock(enBlock);
+    const frIsFnHeader = isFootnoteHeadingBlock(frBlock);
+
+    // Both are footnote headers (e.g. Footnotes / Notes de bas de page) -> lock together
+    if (enIsFnHeader && frIsFnHeader) return 10;
+    // One is footnote header, the other is NOT -> heavy penalty
+    if (enIsFnHeader !== frIsFnHeader) return -8;
+
+    const enIsFnContent = isFootnoteContentBlock(enBlock, enBlocks);
+    const frIsFnContent = isFootnoteContentBlock(frBlock, frBlocks);
+
+    // Both are footnote content items -> lock together
+    if (enIsFnContent && frIsFnContent) return 8;
+    // One is footnote content, the other is regular body text -> penalty to prevent cross-contamination
+    if (enIsFnContent !== frIsFnContent) return -6;
+  }
+
+  if (enTag === frTag) return 2;
+  if (isHeadingTag(enTag) && isHeadingTag(frTag)) return 1.5;
+  return -1;
+}
+
+function alignByTag(enTags, frTags, enBlocks = [], frBlocks = []) {
   const n = enTags.length;
   const m = frTags.length;
-  const MATCH = 2;
-  const MISMATCH = -1;
   const GAP = -1;
 
   if (n * m > 4000000) {
@@ -391,7 +790,7 @@ function alignByTag(enTags, frTags) {
   }
 
   const score = new Array(n + 1);
-  for (let i = 0; i <= n; i++) score[i] = new Int32Array(m + 1);
+  for (let i = 0; i <= n; i++) score[i] = new Float64Array(m + 1);
   for (let i = 1; i <= n; i++) score[i][0] = score[i - 1][0] + GAP;
   for (let j = 1; j <= m; j++) score[0][j] = score[0][j - 1] + GAP;
 
@@ -399,7 +798,15 @@ function alignByTag(enTags, frTags) {
     const rowCur = score[i];
     const rowPrev = score[i - 1];
     for (let j = 1; j <= m; j++) {
-      const diag = rowPrev[j - 1] + (enTags[i - 1] === frTags[j - 1] ? MATCH : MISMATCH);
+      const matchScore = getBlockMatchScore(
+        enTags[i - 1],
+        frTags[j - 1],
+        enBlocks[i - 1],
+        frBlocks[j - 1],
+        enBlocks,
+        frBlocks
+      );
+      const diag = rowPrev[j - 1] + matchScore;
       const up = rowPrev[j] + GAP;
       const left = rowCur[j - 1] + GAP;
       rowCur[j] = Math.max(diag, up, left);
@@ -412,12 +819,20 @@ function alignByTag(enTags, frTags) {
 
   while (i > 0 && j > 0) {
     const cur = score[i][j];
-    const diagVal = score[i - 1][j - 1] + (enTags[i - 1] === frTags[j - 1] ? MATCH : MISMATCH);
-    if (cur === diagVal) {
+    const matchScore = getBlockMatchScore(
+      enTags[i - 1],
+      frTags[j - 1],
+      enBlocks[i - 1],
+      frBlocks[j - 1],
+      enBlocks,
+      frBlocks
+    );
+    const diagVal = score[i - 1][j - 1] + matchScore;
+    if (Math.abs(cur - diagVal) < 1e-6) {
       pairs.push({ enIndex: i - 1, frIndex: j - 1, skip: false });
       i--;
       j--;
-    } else if (cur === score[i - 1][j] + GAP) {
+    } else if (Math.abs(cur - (score[i - 1][j] + GAP)) < 1e-6) {
       pairs.push({ enIndex: i - 1, frIndex: null, skip: false });
       i--;
     } else {
@@ -676,6 +1091,32 @@ a:hover, a:focus {
   color: var(--gc-link-hover) !important;
 }
 
+/* Unstyled and Inline Lists */
+ul.list-unstyled, ol.list-unstyled,
+.list-unstyled,
+ul.list-inline, ol.list-inline,
+.list-inline {
+  padding-left: 0 !important;
+  list-style: none !important;
+  list-style-type: none !important;
+}
+
+ul.list-unstyled > li, ol.list-unstyled > li,
+.list-unstyled > li,
+.list-unstyled li {
+  list-style: none !important;
+  list-style-type: none !important;
+}
+
+ul.list-inline > li, ol.list-inline > li,
+.list-inline > li {
+  display: inline-block !important;
+  padding-right: 5px !important;
+  padding-left: 5px !important;
+  list-style: none !important;
+  list-style-type: none !important;
+}
+
 .alert, section.alert, div.alert, aside.alert {
   position: relative !important;
   margin-top: 1.5em !important;
@@ -767,7 +1208,17 @@ body.gc-light-mode .alert::before {
   border-left-color: #ee7100 !important;
 }
 .alert-warning::before, section.alert-warning::before, div.alert-warning::before, aside.alert-warning::before {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23ee7100'/%3E%3Crect x='10.4' y='5.5' width='3.2' height='8.5' rx='1' fill='%23ffffff'/%3E%3Ccircle cx='12' cy='17.5' r='1.6' fill='%23ffffff'/%3E%3C/svg%3E") !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 2.5px var(--gc-bg, #18181b)) drop-shadow(0 0 1.5px var(--gc-bg, #18181b)) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z' fill='%23ee7100'/%3E%3Crect x='10.75' y='9' width='2.5' height='5.5' rx='1' fill='%23ffffff'/%3E%3Ccircle cx='12' cy='17.2' r='1.35' fill='%23ffffff'/%3E%3C/svg%3E") !important;
+}
+body.gc-light-mode .alert-warning::before,
+body.gc-light-mode section.alert-warning::before,
+body.gc-light-mode div.alert-warning::before,
+body.gc-light-mode aside.alert-warning::before {
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 2.5px #ffffff) drop-shadow(0 0 1.5px #ffffff) !important;
 }
 
 /* Danger Alert */
@@ -1025,6 +1476,46 @@ body.gc-light-mode .btn-default {
 .label-warning { background-color: #ee7100 !important; }
 .label-danger { background-color: #d3080c !important; }
 
+/* Contextual Background Classes */
+.bg-primary,
+thead.bg-primary,
+thead.bg-primary th,
+thead.bg-primary td,
+tr.bg-primary,
+tr.bg-primary th,
+tr.bg-primary td,
+th.bg-primary,
+td.bg-primary,
+body.gc-light-mode thead.bg-primary th,
+body.gc-light-mode thead.bg-primary td,
+body.gc-light-mode tr.bg-primary th,
+body.gc-light-mode tr.bg-primary td,
+body.gc-light-mode th.bg-primary,
+body.gc-light-mode td.bg-primary {
+  background-color: #2572b4 !important;
+  color: #ffffff !important;
+  border-color: #1d5b90 !important;
+}
+
+.bg-primary a,
+.bg-primary a:link,
+.bg-primary a:visited,
+thead.bg-primary a,
+thead.bg-primary a:link,
+thead.bg-primary a:visited,
+tr.bg-primary a,
+tr.bg-primary a:link,
+tr.bg-primary a:visited,
+th.bg-primary a,
+th.bg-primary a:link,
+th.bg-primary a:visited,
+td.bg-primary a,
+td.bg-primary a:link,
+td.bg-primary a:visited {
+  color: #ffffff !important;
+  text-decoration: underline !important;
+}
+
 .badge {
   display: inline-block !important;
   min-width: 10px !important;
@@ -1176,6 +1667,7 @@ const state = {
   outputHtml: '',
   outputTab: 'preview', // 'preview' | 'code'
   frViewMode: 'visual', // 'visual' | 'code'
+  frCustomHtml: null,
 };
 
 // DOM Element References
@@ -1379,6 +1871,15 @@ function parseFrDocxHtml(rawDocxHtml, filename = 'Uploaded Document.docx') {
   checkAlignReady();
 }
 
+// Truncate document name to a given length and add 3 dots if longer
+function truncateDocName(name, max = 25) {
+  if (!name) return '';
+  if (name.length > max) {
+    return name.slice(0, max) + '...';
+  }
+  return name;
+}
+
 function renderDocxStat(count, filename) {
   if (!count) {
     docxStatWrap.innerHTML = `
@@ -1399,8 +1900,11 @@ function renderDocxStat(count, filename) {
   if (condensedFrStat) {
     if (!count) {
       condensedFrStat.textContent = '0 blocks';
+      condensedFrStat.removeAttribute('title');
     } else {
-      condensedFrStat.textContent = `${filename} (${count} block(s))`;
+      const displayName = truncateDocName(filename, 25);
+      condensedFrStat.textContent = `${displayName} (${count} block(s))`;
+      condensedFrStat.setAttribute('title', filename);
     }
   }
 
@@ -1411,7 +1915,10 @@ function renderDocxStat(count, filename) {
       state.frDocxName = '';
       docxStatWrap.innerHTML = '';
       if (docxFile) docxFile.value = '';
-      if (condensedFrStat) condensedFrStat.textContent = '0 blocks';
+      if (condensedFrStat) {
+        condensedFrStat.textContent = '0 blocks';
+        condensedFrStat.removeAttribute('title');
+      }
       checkAlignReady();
     });
   }
@@ -1451,7 +1958,8 @@ function condenseSources() {
   }
   if (condensedFrStat) {
     const docName = state.frDocxName || 'Uploaded .docx';
-    condensedFrStat.textContent = `${docName} (${state.frBlocks.length} block(s))`;
+    const displayName = truncateDocName(docName, 25);
+    condensedFrStat.textContent = `${displayName} (${state.frBlocks.length} block(s))`;
     condensedFrStat.setAttribute('title', docName);
   }
   sourceUploadSection.classList.add('is-condensed');
@@ -1483,7 +1991,7 @@ function expandSources() {
 function computeAlignment() {
   const enTags = state.enBlocks.map((b) => b.tag);
   const frTags = state.frBlocks.map((b) => b.tag);
-  const rows = alignByTag(enTags, frTags);
+  const rows = alignByTag(enTags, frTags, state.enBlocks, state.frBlocks);
   const pairs = rows.filter((r) => r.enIndex !== null && r.frIndex !== null && !r.skip);
   const issues = computeIssues(rows, state.enBlocks, state.frBlocks, []);
 
@@ -1493,6 +2001,7 @@ function computeAlignment() {
   state.activePreviewBlock = 0;
   state.lastKnownEnIndex = 0;
   state.syncOffset = 0;
+  state.frCustomHtml = null;
 
   renderStatsBar();
   buildDualIframePreviews();
@@ -1637,7 +2146,8 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
     }
   });
 
-  // NOTE: Extra French block warning section removed here to rely entirely on the Issues Panel.
+  // Clean any redundant <strong> tags inside <th> header cells
+  cleanThTags(doc.body);
 
   const isLight = state.theme === 'light';
   const bodyClass = isLight ? 'gc-light-mode' : '';
@@ -1650,7 +2160,7 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
   <style>${HIGHLIGHT_CSS}</style>
 </head>
 <body class="${bodyClass}">
-  ${doc.body.innerHTML}
+  ${cleanFrenchHtmlPostProcess(doc.body.innerHTML)}
   <script>
     document.addEventListener('click', (e) => {
       const target = e.target.closest('[data-swap-index]');
@@ -1671,6 +2181,94 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
         if (!isNaN(enIdx)) {
           window.parent.postMessage({ type: 'frEdit', enIndex: enIdx, frIndex: frIdx, text: target.innerText }, '*');
         }
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function buildFrenchFrameSourceFromHtml(rawHtml, frBlocks) {
+  if (!rawHtml || !rawHtml.trim()) {
+    rawHtml = '<p></p>';
+  }
+
+  const parser = new DOMParser();
+  let doc;
+  const hasHtmlTag = /<html[\s>]/i.test(rawHtml);
+
+  if (hasHtmlTag) {
+    doc = parser.parseFromString(rawHtml, 'text/html');
+  } else {
+    doc = parser.parseFromString('<html><head></head><body></body></html>', 'text/html');
+    doc.body.innerHTML = rawHtml;
+  }
+
+  if (doc.documentElement) {
+    doc.documentElement.setAttribute('lang', 'fr');
+  }
+
+  const domBlocks = extractBlocks(doc.body);
+
+  domBlocks.forEach((frBlock, frIdx) => {
+    const pair = state.alignPairs ? state.alignPairs.find((p) => p.frIndex === frIdx && !p.skip) : null;
+    const enIdx = pair && pair.enIndex !== null ? pair.enIndex : frIdx;
+
+    frBlock.el.setAttribute('data-swap-index', String(enIdx));
+    frBlock.el.setAttribute('data-fr-index', String(frIdx));
+    if (pair && pair.enIndex !== null) {
+      frBlock.el.setAttribute('data-en-index', String(pair.enIndex));
+    }
+    frBlock.el.setAttribute('contenteditable', 'true');
+    frBlock.el.classList.add('gc-swap-editable');
+  });
+
+  // Ensure all links on the French side are formatted as root-relative
+  doc.body.querySelectorAll('a[href]').forEach((a) => {
+    const rawHref = a.getAttribute('href');
+    if (rawHref && !isFragmentHref(rawHref)) {
+      a.setAttribute('href', formatFrenchRootRelativeLink(rawHref));
+    }
+  });
+
+  // Clean any redundant <strong> tags inside <th> header cells
+  cleanThTags(doc.body);
+
+  const isLight = state.theme === 'light';
+  const bodyClass = isLight ? 'gc-light-mode' : '';
+
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>${HIGHLIGHT_CSS}</style>
+</head>
+<body class="${bodyClass}">
+  ${cleanFrenchHtmlPostProcess(doc.body.innerHTML)}
+  <script>
+    document.addEventListener('click', (e) => {
+      const target = e.target.closest('[data-swap-index]');
+      if (target) {
+        const rawIdx = target.getAttribute('data-swap-index');
+        const idx = parseInt(rawIdx, 10);
+        if (!isNaN(idx)) {
+          window.parent.postMessage({ type: 'symmetra-jump', side: 'fr', index: idx }, '*');
+        }
+      }
+    });
+
+    document.addEventListener('input', (e) => {
+      const target = e.target.closest('[data-swap-index]');
+      if (target) {
+        const enIdx = parseInt(target.getAttribute('data-en-index') || target.getAttribute('data-swap-index'), 10);
+        const frIdx = target.hasAttribute('data-fr-index') ? parseInt(target.getAttribute('data-fr-index'), 10) : null;
+        window.parent.postMessage({
+          type: 'frEdit',
+          enIndex: isNaN(enIdx) ? null : enIdx,
+          frIndex: isNaN(frIdx) ? null : frIdx,
+          text: target.innerText.trim(),
+        }, '*');
       }
     });
   </script>
@@ -2434,8 +3032,95 @@ function closeControlsModal() {
   }, 220);
 }
 
+function getDivergenceDiagnosticsHtml() {
+  const nEn = state.enBlocks.length;
+  const nFr = state.frBlocks.length;
+  const nMis = state.issueGroups.mismatch.length;
+  const nMiss = state.issueGroups.missing.length;
+  const nExt = state.issueGroups.extra.length;
+
+  if (nEn === nFr && nMis === 0 && nMiss === 0 && nExt === 0) {
+    return '';
+  }
+
+  // Find first index where misalignment occurs
+  let firstDivRow = null;
+  let firstDivIndex = null;
+  for (let idx = 0; idx < state.alignRows.length; idx++) {
+    const r = state.alignRows[idx];
+    if (r.enIndex === null || r.frIndex === null) {
+      firstDivRow = r;
+      firstDivIndex = r.enIndex !== null ? r.enIndex : r.frIndex;
+      break;
+    }
+    if (state.enBlocks[r.enIndex] && state.frBlocks[r.frIndex]) {
+      if (state.enBlocks[r.enIndex].tag !== state.frBlocks[r.frIndex].tag) {
+        firstDivRow = r;
+        firstDivIndex = r.enIndex;
+        break;
+      }
+    }
+  }
+
+  // Find any English blocks containing <br> line breaks
+  const enBlocksWithBr = state.enBlocks
+    .map((b, i) => ({ b, i }))
+    .filter(({ b }) => b.hasBr);
+
+  let brHintsHtml = '';
+  if (enBlocksWithBr.length > 0) {
+    brHintsHtml = `
+      <div class="mt-2.5 pt-2.5 border-t border-amber-500/20 text-xs text-amber-600 dark:text-amber-400">
+        <div class="font-bold flex items-center gap-1.5 mb-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" x2="12" y2="12"/><line x1="12" x2="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>Line Break (&lt;br&gt;) Diagnostic:</span>
+        </div>
+        <p class="mb-2 text-text-secondary leading-relaxed">
+          In Microsoft Word, line breaks create separate paragraphs (<code class="text-accent">&lt;p&gt;</code>). If your English HTML contains <code class="text-accent">&lt;br&gt;</code> tags, it often causes an off-by-one count shift:
+        </p>
+        <div class="space-y-1.5">
+          ${enBlocksWithBr
+            .map(
+              ({ b, i }) => `
+            <div class="flex items-center justify-between p-2 rounded bg-surface/70 border border-border">
+              <span class="text-text font-medium truncate max-w-md">Block #${i + 1} (${b.brCount} &lt;br&gt;): "${escapeHtml(issueSnippet(b.text, 60))}"</span>
+              <button type="button" class="btn btn-secondary text-xs px-2 py-0.5 issue-row-clickable" data-jump-en="${i}">Jump to #${i + 1} →</button>
+            </div>`
+            )
+            .join('')}
+        </div>
+      </div>`;
+  }
+
+  let divergenceNotice = '';
+  if (firstDivRow) {
+    const enBlockNum = firstDivRow.enIndex !== null ? `#${firstDivRow.enIndex + 1}` : 'None';
+    const frBlockNum = firstDivRow.frIndex !== null ? `#${firstDivRow.frIndex + 1}` : 'None';
+    divergenceNotice = `
+      <div class="flex items-center justify-between mt-2 text-xs">
+        <span class="text-text-secondary">
+          First discrepancy begins at <strong class="text-text">English ${enBlockNum} / Word ${frBlockNum}</strong>. All prior blocks match 1:1.
+        </span>
+        ${firstDivRow.enIndex !== null ? `<button type="button" class="btn btn-secondary text-xs px-2 py-0.5 issue-row-clickable" data-jump-en="${firstDivRow.enIndex}">Jump to Discrepancy →</button>` : ''}
+      </div>`;
+  }
+
+  return `
+    <div class="p-3.5 mb-3 rounded-lg bg-amber-500/10 border border-amber-500/25">
+      <div class="flex items-center justify-between font-bold text-xs text-amber-600 dark:text-amber-400">
+        <span>⚡ Alignment Diagnostics & Pinpointer</span>
+        <span class="font-semibold px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300">
+          EN: ${nEn} blocks • FR: ${nFr} blocks (${nFr > nEn ? `+${nFr - nEn} in Word` : nEn > nFr ? `+${nEn - nFr} in HTML` : 'Equal tags'})
+        </span>
+      </div>
+      ${divergenceNotice}
+      ${brHintsHtml}
+    </div>`;
+}
+
 function renderDrawerBody(category) {
   drawerBody.innerHTML = '';
+  const diagHeader = getDivergenceDiagnosticsHtml();
 
   if (category === 'en-tags' || category === 'fr-tags') {
     const blocks = category === 'en-tags' ? state.enBlocks : state.frBlocks;
@@ -2461,7 +3146,7 @@ function renderDrawerBody(category) {
       <div class="issue-row issue-row-clickable" data-jump-en="${category === 'en-tags' ? i : ''}" data-jump-fr="${category === 'fr-tags' ? i : ''}">
         <div class="issue-side info">&lt;${b.tag}&gt;</div>
         <div>
-          <div class="issue-title">#${i + 1} &lt;${b.tag}&gt;</div>
+          <div class="issue-title">#${i + 1} &lt;${b.tag}&gt; ${b.hasBr ? `<span class="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold">${b.brCount} &lt;br&gt;</span>` : ''}</div>
           <div class="issue-detail">${escapeHtml(issueSnippet(b.text, 120))}</div>
         </div>
         <div class="issue-status">${b.spans.length ? `${b.spans.length} inline span(s)` : 'plain block'}</div>
@@ -2473,6 +3158,7 @@ function renderDrawerBody(category) {
       .join('');
 
     drawerBody.innerHTML = `
+      ${diagHeader}
       <div class="p-4 bg-surface-soft border-b border-border">
         <div class="text-xs font-semibold text-text mb-2">${title}</div>
         <div class="flex items-center gap-2 flex-wrap">${badgesHtml}</div>
@@ -2481,9 +3167,9 @@ function renderDrawerBody(category) {
   } else if (category === 'mismatch') {
     const issues = state.issueGroups.mismatch;
     if (!issues.length) {
-      drawerBody.innerHTML = `<div class="p-6 text-center text-text-secondary text-xs">No tag or style mismatches found! Perfect structural symmetry.</div>`;
+      drawerBody.innerHTML = `${diagHeader}<div class="p-6 text-center text-text-secondary text-xs">No tag or style mismatches found! Perfect structural symmetry.</div>`;
     } else {
-      drawerBody.innerHTML = issues
+      drawerBody.innerHTML = diagHeader + issues
         .map(
           (iss) => `
         <div class="issue-row issue-row-clickable" data-jump-en="${iss.enIndex}">
@@ -2503,9 +3189,9 @@ function renderDrawerBody(category) {
   } else if (category === 'missing') {
     const issues = state.issueGroups.missing;
     if (!issues.length) {
-      drawerBody.innerHTML = `<div class="p-6 text-center text-text-secondary text-xs">All English blocks have corresponding French translations.</div>`;
+      drawerBody.innerHTML = `${diagHeader}<div class="p-6 text-center text-text-secondary text-xs">All English blocks have corresponding French translations.</div>`;
     } else {
-      drawerBody.innerHTML = issues
+      drawerBody.innerHTML = diagHeader + issues
         .map(
           (iss) => `
         <div class="issue-row issue-row-clickable" data-jump-en="${iss.enIndex}">
@@ -2525,9 +3211,9 @@ function renderDrawerBody(category) {
   } else if (category === 'extra') {
     const issues = state.issueGroups.extra;
     if (!issues.length) {
-      drawerBody.innerHTML = `<div class="p-6 text-center text-text-secondary text-xs">No extra unaligned French paragraphs in the document.</div>`;
+      drawerBody.innerHTML = `${diagHeader}<div class="p-6 text-center text-text-secondary text-xs">No extra unaligned French paragraphs in the document.</div>`;
     } else {
-      drawerBody.innerHTML = issues
+      drawerBody.innerHTML = diagHeader + issues
         .map(
           (iss) => `
         <div class="issue-row">
@@ -2545,9 +3231,9 @@ function renderDrawerBody(category) {
   } else if (category === 'skipped') {
     const skippedRows = state.alignRows.filter((r) => r.skip);
     if (!skippedRows.length) {
-      drawerBody.innerHTML = `<div class="p-6 text-center text-text-secondary text-xs">No blocks have been skipped.</div>`;
+      drawerBody.innerHTML = `${diagHeader}<div class="p-6 text-center text-text-secondary text-xs">No blocks have been skipped.</div>`;
     } else {
-      drawerBody.innerHTML = skippedRows
+      drawerBody.innerHTML = diagHeader + skippedRows
         .map(
           (row) => `
         <div class="issue-row">
@@ -2772,6 +3458,60 @@ function formatHtmlCode(html) {
 
 // Generate localized French HTML from current state and active frame edits
 function generateFrenchHtmlSource() {
+  if (state.frCustomHtml) {
+    const parser = new DOMParser();
+    let doc;
+    const hasHtmlTag = /<html[\s>]/i.test(state.frCustomHtml);
+
+    if (hasHtmlTag) {
+      doc = parser.parseFromString(state.frCustomHtml, 'text/html');
+    } else {
+      doc = parser.parseFromString('<html><head></head><body></body></html>', 'text/html');
+      doc.body.innerHTML = state.frCustomHtml;
+    }
+
+    if (doc.documentElement) {
+      doc.documentElement.setAttribute('lang', 'fr');
+    }
+
+    // Synchronize any live visual edits made in the French visual preview frame into doc
+    try {
+      if (frPreviewFrame && frPreviewFrame.contentDocument) {
+        const editables = frPreviewFrame.contentDocument.querySelectorAll('.gc-swap-editable');
+        const docBlocks = extractBlocks(doc.body);
+        editables.forEach((el) => {
+          const frIdx = el.hasAttribute('data-fr-index') ? parseInt(el.getAttribute('data-fr-index'), 10) : null;
+          if (frIdx !== null && docBlocks[frIdx]) {
+            const currentText = el.innerText.trim();
+            replaceBlockTextPreservingLinks(
+              docBlocks[frIdx].el,
+              currentText,
+              docBlocks[frIdx].attrTarget,
+              docBlocks[frIdx].spans
+            );
+            if (state.frBlocks[frIdx]) {
+              state.frBlocks[frIdx].text = currentText;
+            }
+          }
+        });
+      }
+    } catch (_) {}
+
+    // Ensure all links on the French side are formatted as root-relative
+    doc.body.querySelectorAll('a[href]').forEach((a) => {
+      const rawHref = a.getAttribute('href');
+      if (rawHref && !isFragmentHref(rawHref)) {
+        a.setAttribute('href', formatFrenchRootRelativeLink(rawHref));
+      }
+    });
+
+    // Clean any redundant <strong> tags inside <th> header cells
+    cleanThTags(doc.body);
+
+    const rawHtml = hasHtmlTag ? doc.documentElement.outerHTML : doc.body.innerHTML;
+    return formatHtmlCode(cleanFrenchHtmlPostProcess(rawHtml));
+  }
+
   const parser = new DOMParser();
   let doc;
   const hasHtmlTag = /<html[\s>]/i.test(state.enHtml);
@@ -2826,8 +3566,11 @@ function generateFrenchHtmlSource() {
     }
   });
 
+  // Clean any redundant <strong> tags inside <th> header cells
+  cleanThTags(doc.body);
+
   const rawHtml = hasHtmlTag ? doc.documentElement.outerHTML : doc.body.innerHTML;
-  return formatHtmlCode(rawHtml);
+  return formatHtmlCode(cleanFrenchHtmlPostProcess(rawHtml));
 }
 
 function highlightHtmlCode(code) {
@@ -2867,6 +3610,17 @@ function highlightHtmlCode(code) {
   );
 }
 
+function syncFrCodeScroll() {
+  if (!frCodeEditor) return;
+  if (frCodeHighlight) {
+    frCodeHighlight.scrollTop = frCodeEditor.scrollTop;
+    frCodeHighlight.scrollLeft = frCodeEditor.scrollLeft;
+  }
+  if (frCodeGutter) {
+    frCodeGutter.scrollTop = frCodeEditor.scrollTop;
+  }
+}
+
 function updateFrCodeView() {
   if (!frCodeEditor) return;
   const text = frCodeEditor.value || '';
@@ -2889,18 +3643,12 @@ function updateFrCodeView() {
 
   // Update Syntax Highlighting
   if (frCodeHighlightInner) {
-    const trailing = text.endsWith('\n') ? ' ' : '';
+    const trailing = text.endsWith('\n') ? '\n' : '';
     frCodeHighlightInner.innerHTML = highlightHtmlCode(text) + trailing;
   }
 
   // Synchronize Scroll
-  if (frCodeHighlight) {
-    frCodeHighlight.scrollTop = frCodeEditor.scrollTop;
-    frCodeHighlight.scrollLeft = frCodeEditor.scrollLeft;
-  }
-  if (frCodeGutter) {
-    frCodeGutter.scrollTop = frCodeEditor.scrollTop;
-  }
+  syncFrCodeScroll();
 }
 
 function updateFrCodeStats() {
@@ -2936,6 +3684,61 @@ function switchFrenchView(mode) {
     if (frPreviewFrame) frPreviewFrame.style.display = 'none';
     if (frCodeWrap) frCodeWrap.style.display = 'flex';
   } else {
+    // Returning to Visual Mode: Update French preview with any code added, modified, or removed in the Code Editor
+    if (frCodeEditor && frCodeEditor.value) {
+      const editedCode = frCodeEditor.value.trim();
+      state.frCustomHtml = editedCode;
+
+      // Extract new blocks from edited HTML to update state.frBlocks
+      const parser = new DOMParser();
+      let doc;
+      const hasHtmlTag = /<html[\s>]/i.test(editedCode);
+      if (hasHtmlTag) {
+        doc = parser.parseFromString(editedCode, 'text/html');
+      } else {
+        doc = parser.parseFromString('<html><head></head><body></body></html>', 'text/html');
+        doc.body.innerHTML = editedCode;
+      }
+
+      const extractedFrBlocks = extractBlocks(doc.body);
+      state.frBlocks = extractedFrBlocks.map((b) => ({
+        tag: b.tag,
+        attrTarget: b.attrTarget,
+        text: b.text,
+        spans: b.spans,
+      }));
+
+      // Recompute alignments and issues
+      const enTags = state.enBlocks.map((b) => b.tag);
+      const frTags = state.frBlocks.map((b) => b.tag);
+      const rows = alignByTag(enTags, frTags);
+      const pairs = rows.filter((r) => r.enIndex !== null && r.frIndex !== null && !r.skip);
+      const issues = computeIssues(rows, state.enBlocks, state.frBlocks, []);
+
+      state.alignRows = rows;
+      state.alignPairs = pairs;
+      state.issueGroups = issues;
+
+      if (frBlockCountBadge) {
+        frBlockCountBadge.textContent = `${state.frBlocks.length} blocks`;
+      }
+      renderStatsBar();
+
+      // Render updated visual preview frame
+      const updatedFrDocHtml = buildFrenchFrameSourceFromHtml(editedCode, state.frBlocks);
+      if (frPreviewFrame) {
+        frPreviewFrame.srcdoc = updatedFrDocHtml;
+      }
+
+      setupIframeEventListeners();
+
+      setTimeout(() => {
+        applyActiveHighlight();
+        alignPreviewBlocks(state.activePreviewBlock || 0);
+        updateActiveBlockHud(state.activePreviewBlock || 0);
+      }, 100);
+    }
+
     if (frCodeWrap) frCodeWrap.style.display = 'none';
     if (frPreviewFrame) frPreviewFrame.style.display = 'block';
   }
@@ -3221,15 +4024,11 @@ function initEventListeners() {
       updateFrCodeView();
     });
 
-    frCodeEditor.addEventListener('scroll', () => {
-      if (frCodeHighlight) {
-        frCodeHighlight.scrollTop = frCodeEditor.scrollTop;
-        frCodeHighlight.scrollLeft = frCodeEditor.scrollLeft;
-      }
-      if (frCodeGutter) {
-        frCodeGutter.scrollTop = frCodeEditor.scrollTop;
-      }
-    });
+    frCodeEditor.addEventListener('scroll', syncFrCodeScroll);
+    frCodeEditor.addEventListener('click', syncFrCodeScroll);
+    frCodeEditor.addEventListener('keyup', syncFrCodeScroll);
+    frCodeEditor.addEventListener('select', syncFrCodeScroll);
+    frCodeEditor.addEventListener('focus', syncFrCodeScroll);
 
     // Support tab indent in code editor
     frCodeEditor.addEventListener('keydown', (e) => {
@@ -3241,6 +4040,7 @@ function initEventListeners() {
         frCodeEditor.selectionStart = frCodeEditor.selectionEnd = start + 2;
         updateFrCodeView();
       }
+      requestAnimationFrame(syncFrCodeScroll);
     });
   }
 
