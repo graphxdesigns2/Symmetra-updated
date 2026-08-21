@@ -635,6 +635,12 @@ html[data-theme="dark"] .panel {
   box-shadow: 0 2px 5px rgba(192, 38, 211, 0.28);
 }
 
+.tag.tag-doc {
+  background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.28);
+}
+
 textarea.symmetra-textarea {
   width: 100%;
   box-sizing: border-box;
@@ -909,6 +915,11 @@ textarea.symmetra-textarea:focus {
   height: auto;
   background: #000;
   gap: 0;
+  transition: grid-template-columns 0.2s ease;
+}
+
+#previewSection .workspace.has-word-doc {
+  grid-template-columns: 1fr 1fr 1fr;
 }
 
 #previewSection .preview-pane {
@@ -918,10 +929,19 @@ textarea.symmetra-textarea:focus {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  border-right: 1px solid rgba(255,255,255,.16);
 }
 
-#previewSection .preview-pane:first-child {
-  border-right: 1px solid rgba(255,255,255,.16);
+#previewSection .preview-pane:last-child {
+  border-right: none;
+}
+
+html[data-theme="light"] #previewSection .preview-pane {
+  border-right: 1px solid var(--border);
+}
+
+html[data-theme="light"] #previewSection .preview-pane:last-child {
+  border-right: none;
 }
 
 /* Light theme only — dark theme keeps the rule above untouched */
@@ -970,7 +990,7 @@ html[data-theme="light"] #previewSection .preview-header .fr-view-btn.is-active 
   overflow: hidden;
 }
 
-#enPreviewFrame, #frPreviewFrame {
+#enPreviewFrame, #frPreviewFrame, #docxPreviewFrame {
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -2181,3 +2201,122 @@ html[data-theme="dark"] .alert p, html[data-theme="dark"] .alert > p, html[data-
 html[data-theme="dark"] .alert a, html[data-theme="dark"] .alert .alert-link {
   color: #93c5fd;
 }
+
+/* QA & Diff Inspector Styles */
+.qa-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.qa-diff-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) minmax(0, 1fr) 140px;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  transition: background 0.15s ease;
+}
+
+.qa-diff-row:hover {
+  background: var(--surface-hover);
+}
+
+.qa-diff-row.is-mismatched {
+  background: rgba(245, 158, 11, 0.05);
+  border-left: 3px solid #f59e0b;
+}
+
+.qa-diff-row.is-missing {
+  background: rgba(244, 63, 94, 0.05);
+  border-left: 3px solid #f43f5e;
+}
+
+.qa-block-num {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.qa-block-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.qa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.qa-badge-ok {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.qa-badge-warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.qa-badge-danger {
+  background: rgba(244, 63, 94, 0.12);
+  color: #f43f5e;
+}
+
+.qa-badge-info {
+  background: rgba(98, 88, 217, 0.12);
+  color: var(--accent);
+}
+
+.qa-badge-cyan {
+  background: rgba(6, 182, 212, 0.12);
+  color: #06b6d4;
+}
+
+/* Typography Linter Badges */
+.typo-fix-highlight {
+  background: rgba(16, 185, 129, 0.2);
+  border-bottom: 2px solid #10b981;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.lang-en-highlight {
+  background: rgba(6, 182, 212, 0.2);
+  border-bottom: 2px solid #06b6d4;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* Table Integrity Matrix */
+.table-integrity-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.table-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.table-matrix-cell {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+

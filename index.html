@@ -201,6 +201,10 @@
           <!-- Top View Control Toolbar -->
           <div class="view-control-bar" id="viewControlBar">
             <div class="view-control-actions view-control-actions-left">
+              <button type="button" id="toggleWordDocBtn" class="view-control-button" title="Toggle Original Word Document view (3-pane layout)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 inline mr-1 text-blue-400"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span>Word doc (Original)</span>
+              </button>
               <button type="button" id="toggleFocusMode" class="view-control-button" title="Dim inactive blocks">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 inline mr-1"><circle cx="12" cy="12" r="3"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></svg>
                 <span>Focus mode</span>
@@ -212,6 +216,18 @@
             </div>
 
             <div class="view-control-actions view-control-actions-center">
+              <button type="button" id="openQaDiffBtn" class="view-control-button view-control-button-qa" title="Open Side-by-Side QA & Diff Inspector">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 inline mr-1 text-accent"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                <span>QA &amp; Diff</span>
+              </button>
+              <button type="button" id="openTypographyBtn" class="view-control-button" title="Linter and Auto-Fixer for French Non-Breaking Spaces (&nbsp; / insécables)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 inline mr-1 text-emerald-500"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></svg>
+                <span>French Typography</span>
+              </button>
+              <button type="button" id="openLangEnBtn" class="view-control-button" title="Detect & tag untranslated English terms with lang='en'">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 inline mr-1 text-cyan-500"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <span>Smart lang="en"</span>
+              </button>
               <button type="button" id="openControlsModalBtn" class="view-control-button view-control-button-controls" title="View navigation controls, shortcuts, and tips (?)">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 inline mr-1"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                 <span>Controls &amp; Help</span>
@@ -338,12 +354,49 @@
                 </div>
               </div>
             </div>
+
+            <!-- Third Pane: Original Unmodified Word Document View -->
+            <div class="preview-pane" id="docxPreviewPane" style="display: none;">
+              <div class="preview-header">
+                <span class="flex items-center gap-2.5 font-semibold text-sm">
+                  <span class="tag tag-doc">DOCX</span>
+                  <span id="docxPaneTitle">Word Document (Original unmodified)</span>
+                </span>
+                <div class="flex items-center gap-2.5">
+                  <span id="docxBlockCountBadge" class="text-xs text-slate-400 font-normal">0 blocks</span>
+                  <button
+                    type="button"
+                    id="closeWordDocPaneBtn"
+                    class="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer border-0 bg-transparent flex items-center justify-center"
+                    title="Close Word Document view"
+                    aria-label="Close Word Document view"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="preview-frame-wrap" id="docxPreviewWrap">
+                <iframe id="docxPreviewFrame" title="Unmodified Word Document Preview" sandbox="allow-same-origin allow-scripts"></iframe>
+              </div>
+            </div>
           </div>
 
           <!-- Expandable Diagnostic & Inspector Sheet -->
           <div id="statDetailPanel">
             <div class="stat-detail-header">
               <div class="flex items-center gap-1.5 flex-wrap" id="drawerTabsWrap">
+                <button type="button" class="drawer-tab px-3 py-1.5 rounded-md text-xs font-semibold transition-all" data-category="qa-diff" id="drawerTabQaDiff">
+                  QA &amp; Diff (0)
+                </button>
+                <button type="button" class="drawer-tab px-3 py-1.5 rounded-md text-xs font-semibold transition-all" data-category="typography" id="drawerTabTypography">
+                  French Typography (0)
+                </button>
+                <button type="button" class="drawer-tab px-3 py-1.5 rounded-md text-xs font-semibold transition-all" data-category="lang-en" id="drawerTabLangEn">
+                  Smart lang="en" (0)
+                </button>
+                <button type="button" class="drawer-tab px-3 py-1.5 rounded-md text-xs font-semibold transition-all" data-category="tables-lists" id="drawerTabTables">
+                  Tables &amp; Lists (0)
+                </button>
                 <button type="button" class="drawer-tab px-3 py-1.5 rounded-md text-xs font-semibold transition-all" data-category="mismatch" id="drawerTabMismatch">
                   Mismatches (0)
                 </button>
@@ -387,20 +440,32 @@
 
               <!-- Interactive Segmented Metrics Bar -->
               <div class="preview-segmented-bar">
-                <button type="button" class="preview-segment-tab" data-category="en-tags" id="tabEnTags" title="Inspect English HTML tag breakdown">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-indigo-500"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
-                  <span>EN Tags</span>
-                  <span class="preview-tab-count" id="cEn">0</span>
+                <button type="button" class="preview-segment-tab" data-category="qa-diff" id="tabQaDiff" title="Inspect Side-by-Side QA Diff & Links">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-accent"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                  <span>QA Diff</span>
+                  <span class="preview-tab-count" id="cQaDiff">0</span>
                 </button>
 
-                <button type="button" class="preview-segment-tab" data-category="fr-tags" id="tabFrTags" title="Inspect French HTML tag breakdown">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-cyan-500"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
-                  <span>FR Tags</span>
-                  <span class="preview-tab-count" id="cFr">0</span>
+                <button type="button" class="preview-segment-tab" data-category="typography" id="tabTypography" title="Inspect French Typography and Non-Breaking Spaces (&nbsp;)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-emerald-500"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></svg>
+                  <span>Typo</span>
+                  <span class="preview-tab-count" id="cTypo">0</span>
+                </button>
+
+                <button type="button" class="preview-segment-tab" data-category="lang-en" id="tabLangEn" title="Inspect untranslated English quotes & terms">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-cyan-500"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  <span>lang="en"</span>
+                  <span class="preview-tab-count" id="cLangEn">0</span>
+                </button>
+
+                <button type="button" class="preview-segment-tab" data-category="tables-lists" id="tabTables" title="Inspect Table header preservation and List counts">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-indigo-400"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
+                  <span>Tables &amp; Lists</span>
+                  <span class="preview-tab-count" id="cTables">0</span>
                 </button>
 
                 <button type="button" class="preview-segment-tab" data-category="mismatch" id="tabMismatch" title="Inspect HTML element & style mismatches">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-text-muted"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12" y1="17" y2="17.01"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-text-muted"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" x2="13"/><line x1="12" x2="12" y1="17" y2="17.01"/></svg>
                   <span>Mismatches</span>
                   <span class="preview-tab-count" id="cMismatch">0</span>
                 </button>
@@ -417,15 +482,39 @@
                   <span class="preview-tab-count" id="cExtra">0</span>
                 </button>
 
+                <button type="button" class="preview-segment-tab" data-category="en-tags" id="tabEnTags" title="Inspect English HTML tag breakdown">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-indigo-500"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                  <span>EN</span>
+                  <span class="preview-tab-count" id="cEn">0</span>
+                </button>
+
+                <button type="button" class="preview-segment-tab" data-category="fr-tags" id="tabFrTags" title="Inspect French HTML tag breakdown">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-cyan-500"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+                  <span>FR</span>
+                  <span class="preview-tab-count" id="cFr">0</span>
+                </button>
+
                 <button type="button" class="preview-segment-tab" data-category="skipped" id="tabSkipped" title="Inspect skipped alignment rows">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-text-muted"><path d="M22 2 2 22"/></svg>
-                  <span>Skipped</span>
+                  <span>Skip</span>
                   <span class="preview-tab-count" id="cSkip">0</span>
                 </button>
               </div>
 
-              <!-- Active Block Location HUD & Direct Jump -->
+              <!-- Active Block Location HUD, Re-alignment Split/Merge & Direct Jump -->
               <div class="preview-dock-hud">
+                <!-- Split & Merge Action Buttons for Active Block -->
+                <div class="flex items-center gap-1 mr-1 border-r border-border pr-2">
+                  <button type="button" id="splitActiveBlockBtn" class="btn btn-secondary text-[11px] px-2 py-1 flex items-center gap-1" title="Split the active French block into two blocks">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                    <span>Split</span>
+                  </button>
+                  <button type="button" id="mergeActiveBlockBtn" class="btn btn-secondary text-[11px] px-2 py-1 flex items-center gap-1" title="Merge the active French block with the next block">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/></svg>
+                    <span>Merge Next</span>
+                  </button>
+                </div>
+
                 <div class="preview-block-stepper">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-accent"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                   <button type="button" id="blockJumpToggleBtn" class="hover:underline font-mono" title="Click to jump to a specific block number">
@@ -631,6 +720,61 @@
             <span class="text-xs text-text-muted">Tip: Reopen this guide anytime from the top bar or by pressing <kbd class="kbd text-[10px]">?</kbd>.</span>
             <button type="button" id="dismissControlsModalBtn" class="btn btn-primary text-xs px-4 py-2">
               Got it
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Split Block Modal -->
+      <div id="splitBlockModal" class="controls-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="splitBlockModalTitle" style="display: none;">
+        <div class="controls-modal-card max-w-xl">
+          <div class="controls-modal-header">
+            <div class="flex items-center gap-2.5">
+              <span class="p-2 rounded-lg bg-accent-soft text-accent">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+              </span>
+              <div>
+                <h2 id="splitBlockModalTitle" class="text-base font-bold text-text">Split French Text Block</h2>
+                <p class="text-xs text-text-secondary" id="splitBlockSubTitle">Divide a combined block into two separate aligned blocks</p>
+              </div>
+            </div>
+            <button type="button" id="closeSplitModalBtn" class="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text transition-colors" title="Close (Esc)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+
+          <div class="p-5 flex flex-col gap-4">
+            <div>
+              <label class="block text-xs font-bold text-text mb-1">Original French Text to Split:</label>
+              <textarea id="splitOriginalText" class="w-full h-24 p-2.5 text-xs font-mono rounded-lg bg-surface-soft border border-border text-text resize-none" readonly></textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-text mb-1">Part 1 (Current Block):</label>
+                <textarea id="splitPart1Text" class="w-full h-28 p-2.5 text-xs rounded-lg bg-surface border border-border text-text focus:outline-none focus:border-accent resize-none" placeholder="First portion..."></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-text mb-1">Part 2 (New Following Block):</label>
+                <textarea id="splitPart2Text" class="w-full h-28 p-2.5 text-xs rounded-lg bg-surface border border-border text-text focus:outline-none focus:border-accent resize-none" placeholder="Second portion..."></textarea>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1 border-t border-border">
+              <span class="text-xs text-text-secondary">Quick Split Presets:</span>
+              <button type="button" id="splitBySentenceBtn" class="btn btn-secondary text-xs px-2.5 py-1">Split at First Period (.)</button>
+              <button type="button" id="splitByNewlineBtn" class="btn btn-secondary text-xs px-2.5 py-1">Split at Line Break</button>
+              <button type="button" id="splitByHalfBtn" class="btn btn-secondary text-xs px-2.5 py-1">Split in Half</button>
+            </div>
+          </div>
+
+          <div class="controls-modal-footer">
+            <button type="button" id="cancelSplitModalBtn" class="btn btn-secondary text-xs px-4 py-2">
+              Cancel
+            </button>
+            <button type="button" id="confirmSplitBlockBtn" class="btn btn-primary text-xs px-4 py-2 flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              <span>Apply Split &amp; Re-align</span>
             </button>
           </div>
         </div>

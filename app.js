@@ -43,11 +43,12 @@ const SAMPLE_FR_DOCX_HTML = `<h2>Prestations d'assurance-emploi et congés</h2>
 const BLOCK_SELECTOR =
   'h1,h2,h3,h4,h5,h6,p,li,dt,dd,td,th,figcaption,blockquote,caption,summary,img[alt],input[placeholder],input[aria-label],textarea[placeholder],button[aria-label],.alert,section.alert,div.alert,aside.alert,.well,.panel-body';
 
-const SPAN_TAGS = ['a', 'strong', 'b', 'em', 'i'];
+const SPAN_TAGS = ['a', 'strong', 'b', 'em', 'i', 'span'];
 
 function spanType(tag) {
   if (tag === 'a') return 'a';
   if (tag === 'strong' || tag === 'b') return 'strong';
+  if (tag === 'span') return 'span';
   return 'em';
 }
 
@@ -92,6 +93,9 @@ function isFootnoteBoilerplateElement(el) {
 function isLeafBlock(el) {
   const tagName = el.tagName.toLowerCase();
   if (['img', 'input', 'textarea', 'button'].includes(tagName)) return true;
+  // If this is a list item <li> that contains sub-lists (<ul> or <ol>), it is treated as a valid content block
+  // for its own immediate text and links, while its child <li> items are also extracted as their own blocks.
+  if (tagName === 'li') return true;
   // If it contains child blocks, check if those child blocks are actual content blocks (not just boilerplate)
   const childBlocks = Array.from(el.querySelectorAll(BLOCK_SELECTOR)).filter(
     (child) => child !== el && !isFootnoteBoilerplateElement(child)
@@ -256,25 +260,36 @@ function getBlockContent(el) {
   if (['input', 'button'].includes(tag) && el.hasAttribute('aria-label'))
     return el.getAttribute('aria-label') || '';
   
-  if (el.querySelector('.wb-inv, a.fn-lnk, sup > a.fn-lnk, .fn-rtn, a[href*="-rf"]')) {
-    const clone = el.cloneNode(true);
-    clone.querySelectorAll('.fn-rtn, a[href*="-rf"]').forEach((rtn) => rtn.remove());
-    clone.querySelectorAll('.wb-inv').forEach((inv) => {
-      if (/Footnote|Note de bas de page|Return to footnote|Retour à la référence/i.test(inv.textContent)) {
-        inv.remove();
-      }
-    });
-    return (clone.textContent || '').replace(/\s+/g, ' ').trim();
-  }
-  return (el.textContent || '').replace(/\s+/g, ' ').trim();
+  // If this element contains child nested lists (e.g. <li> with a child <ul> or <ol>),
+  // clone the element and remove child <ul> and <ol> so getBlockContent returns ONLY
+  // the text belonging to the parent list item (e.g. "Risk assessment considerations").
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll('ul, ol').forEach((childList) => childList.remove());
+  clone.querySelectorAll('.fn-rtn, a[href*="-rf"]').forEach((rtn) => rtn.remove());
+  clone.querySelectorAll('.wb-inv').forEach((inv) => {
+    if (/Footnote|Note de bas de page|Return to footnote|Retour à la référence/i.test(inv.textContent)) {
+      inv.remove();
+    }
+  });
+  return (clone.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
 function applyFrenchTypographyRules(text) {
   if (!text) return text;
   return text
-    .replace(/(\s*)([:?!;])/g, '\u00A0$2')
-    .replace(/«\s*/g, '«\u00A0')
-    .replace(/\s*»/g, '\u00A0»');
+    // Two-part punctuation marks require non-breaking space before them: : ; ? !
+    .replace(/(?:[ \t\r\n\u00A0]*)([:;?!])/g, '\u00A0$1')
+    // Guillemets: non-breaking space inside quotes
+    .replace(/«[ \t\r\n\u00A0]*/g, '«\u00A0')
+    .replace(/[ \t\r\n\u00A0]*»/g, '\u00A0»')
+    // Currency symbols ($ and €) require non-breaking space before them when following numbers
+    .replace(/(\d)[ \t\r\n\u00A0]*([$€])/g, '$1\u00A0$2')
+    // Percentage (%) symbol requires non-breaking space before it when following numbers
+    .replace(/(\d)[ \t\r\n\u00A0]*%/g, '$1\u00A0%')
+    // Numbered ordinals: 1er, 2e, etc. with non-breaking space after numbers when followed by units (km, h, min, s, etc.)
+    .replace(/(\d)[ \t\r\n\u00A0]+(km|kg|mg|m|cm|mm|h|min|s|ans|jours|mois|pages|p\.|art\.|no|n°)\b/gi, '$1\u00A0$2')
+    // Prevent accidental double non-breaking spaces
+    .replace(/\u00A0+/g, '\u00A0');
 }
 
 function extractBlockSpans(el) {
@@ -287,14 +302,25 @@ function extractBlockSpans(el) {
         type,
         text: (el.textContent || '').replace(/\s+/g, ' ').trim(),
         href: type === 'a' ? el.getAttribute('href') || '' : undefined,
+        lang: el.getAttribute('lang') || undefined,
       },
     ];
   }
   const found = Array.from(el.querySelectorAll(SPAN_TAGS.join(', '))).filter(
-    (n) => !isFootnoteElement(n)
+    (n) => !isFootnoteElement(n) && !n.closest('ul, ol')?.parentElement?.closest(el.tagName) === false && (!n.closest('ul, ol') || n.closest('ul, ol') === el.closest('ul, ol'))
   );
-  const foundSet = new Set(found);
-  const topLevel = found.filter((n) => {
+  // Specifically: if `el` contains child lists (`<ul>` or `<ol>`), ignore any span inside those child lists
+  const filteredFound = Array.from(el.querySelectorAll(SPAN_TAGS.join(', '))).filter((n) => {
+    if (isFootnoteElement(n)) return false;
+    // Check if `n` is inside a child list that is nested inside `el`
+    const childList = n.closest('ul, ol');
+    if (childList && el.contains(childList) && childList !== el) {
+      return false;
+    }
+    return true;
+  });
+  const foundSet = new Set(filteredFound);
+  const topLevel = filteredFound.filter((n) => {
     let p = n.parentElement;
     while (p && p !== el) {
       if (foundSet.has(p)) return false;
@@ -309,6 +335,7 @@ function extractBlockSpans(el) {
         type,
         text: (n.textContent || '').replace(/\s+/g, ' ').trim(),
         href: type === 'a' ? n.getAttribute('href') || '' : undefined,
+        lang: n.getAttribute('lang') || undefined,
       };
     })
     .filter((s) => s.text.length > 0);
@@ -339,6 +366,53 @@ function extractBlocks(rootEl) {
     .filter((b) => b.text.length > 0)
     .filter((b) => !isClassificationMarking(b.text))
     .filter((b) => !isPlainUrlText(b.text));
+}
+
+function tagElementAsSwapTarget(el, attributes = {}, classNames = []) {
+  if (!el) return el;
+  let targetEl = el;
+
+  // If this element is an <li> that contains direct child sub-lists (<ul> or <ol>),
+  // do NOT place the swap target / highlight boundary on the parent <li> itself,
+  // because that would wrap and highlight all child lists and nested items.
+  // Instead, isolate its direct text and inline nodes in a <span class="gc-li-content">
+  // so that highlighting and navigation moves item-by-item (<li> to <li>).
+  const tag = el.tagName ? el.tagName.toLowerCase() : '';
+  if (tag === 'li') {
+    const childLists = Array.from(el.querySelectorAll(':scope > ul, :scope > ol'));
+    if (childLists.length > 0) {
+      let contentSpan = el.querySelector(':scope > .gc-li-content');
+      if (!contentSpan) {
+        contentSpan = el.ownerDocument.createElement('span');
+        contentSpan.className = 'gc-li-content';
+        const nodesToMove = [];
+        Array.from(el.childNodes).forEach((child) => {
+          if (!childLists.includes(child) && child !== contentSpan) {
+            nodesToMove.push(child);
+          }
+        });
+        if (childLists[0]) {
+          el.insertBefore(contentSpan, childLists[0]);
+        } else {
+          el.appendChild(contentSpan);
+        }
+        nodesToMove.forEach((n) => contentSpan.appendChild(n));
+      }
+      targetEl = contentSpan;
+    }
+  }
+
+  for (const [k, v] of Object.entries(attributes)) {
+    if (v !== undefined && v !== null) {
+      targetEl.setAttribute(k, String(v));
+    }
+  }
+
+  if (classNames && classNames.length) {
+    targetEl.classList.add(...classNames);
+  }
+
+  return targetEl;
 }
 
 function escapeRegExp(text) {
@@ -454,6 +528,11 @@ function replaceBlockTextPreservingLinks(
     return { unresolvedLinks: 0 };
   }
 
+  // If this element has nested child lists (e.g. an <li> that contains a <ul> or <ol>),
+  // detach those child lists before updating this element's text/links, and re-append them afterward.
+  const childLists = Array.from(el.querySelectorAll(':scope > ul, :scope > ol'));
+  childLists.forEach((cl) => cl.remove());
+
   const blockTag = el.tagName.toLowerCase();
   const isTh = blockTag === 'th' || el.tagName.toLowerCase() === 'th' || Boolean(el.closest('th'));
 
@@ -473,6 +552,7 @@ function replaceBlockTextPreservingLinks(
     if (blockTag === 'a') {
       const originalHref = el.getAttribute('href') || '';
       el.textContent = newText;
+      childLists.forEach((cl) => el.appendChild(cl));
       if (isFragmentHref(originalHref)) return { unresolvedLinks: 0 };
       if (isNodeHref(originalHref)) {
         el.setAttribute('href', convertNodeHrefToFrench(originalHref));
@@ -486,14 +566,16 @@ function replaceBlockTextPreservingLinks(
       return { unresolvedLinks: 1 };
     }
     el.textContent = newText;
+    childLists.forEach((cl) => el.appendChild(cl));
     return { unresolvedLinks: 0 };
   }
 
   const oldSpans = extractBlockSpans(el);
 
   // If the whole English block was wrapped in a single <strong>, <b>, <em>, or <i>
-  const originalText = (el.textContent || '').replace(/\s+/g, ' ').trim();
-  if (oldSpans.length === 1 && originalText === oldSpans[0].text && blockFootnotes.length === 0) {
+  // Use getBlockContent(el) to ignore child sub-lists when checking if whole block was wrapped
+  const originalText = getBlockContent(el);
+  if (oldSpans.length === 1 && blockFootnotes.length === 0) {
     const span = oldSpans[0];
     if (span.type === 'a') {
       const originalHref = span.href || el.querySelector('a')?.getAttribute('href') || '';
@@ -502,20 +584,24 @@ function replaceBlockTextPreservingLinks(
       if (isFragmentHref(originalHref)) {
         aElem.setAttribute('href', originalHref);
         el.replaceChildren(aElem);
+        childLists.forEach((cl) => el.appendChild(cl));
         return { unresolvedLinks: 0 };
       }
       if (isNodeHref(originalHref)) {
         aElem.setAttribute('href', convertNodeHrefToFrench(originalHref));
         el.replaceChildren(aElem);
+        childLists.forEach((cl) => el.appendChild(cl));
         return { unresolvedLinks: 0 };
       }
       const frLink = (frSpans || []).find((s) => s.type === 'a');
       if (frLink && frLink.href) {
         aElem.setAttribute('href', formatFrenchRootRelativeLink(frLink.href));
         el.replaceChildren(aElem);
+        childLists.forEach((cl) => el.appendChild(cl));
         return { unresolvedLinks: 0 };
       }
       el.replaceChildren(document.createTextNode(newText));
+      childLists.forEach((cl) => el.appendChild(cl));
       return { unresolvedLinks: 1 };
     }
 
@@ -523,19 +609,23 @@ function replaceBlockTextPreservingLinks(
     // For <th> headers, do not output <strong> tags as <th> is already inherently bold
     if (isTh && span.type === 'strong') {
       el.replaceChildren(document.createTextNode(newText));
+      childLists.forEach((cl) => el.appendChild(cl));
       return { unresolvedLinks: 0 };
     }
 
     // Replicate the exact English container emphasis so the entire French paragraph is bolded/italicized
-    const tagElem = document.createElement(span.type === 'strong' ? 'strong' : 'em');
-    const frLinks = (frSpans || []).filter((s) => s.type === 'a' && s.href);
-    if (frLinks.length > 0) {
-      replaceBlockTextPreservingLinks(tagElem, newText, 'text', frSpans);
-    } else {
-      tagElem.textContent = newText;
+    if (originalText === span.text) {
+      const tagElem = document.createElement(span.type === 'strong' ? 'strong' : 'em');
+      const frLinks = (frSpans || []).filter((s) => s.type === 'a' && s.href);
+      if (frLinks.length > 0) {
+        replaceBlockTextPreservingLinks(tagElem, newText, 'text', frSpans);
+      } else {
+        tagElem.textContent = newText;
+      }
+      el.replaceChildren(tagElem);
+      childLists.forEach((cl) => el.appendChild(cl));
+      return { unresolvedLinks: 0 };
     }
-    el.replaceChildren(tagElem);
-    return { unresolvedLinks: 0 };
   }
 
   // Determine spans to apply:
@@ -577,6 +667,30 @@ function replaceBlockTextPreservingLinks(
         isNodeLink: isNode,
       });
     });
+  } else if (oldSpans && oldSpans.length > 0) {
+    // When the Word document provides plain text without explicit hyperlinks/spans,
+    // check if the English structure had hyperlinks (e.g. Table of Contents list items like <li><a href="#a1">Purpose</a></li>).
+    // In that case, wrap the entire French text with the corresponding link skeleton.
+    const enLinks = oldSpans.filter((s) => s.type === 'a');
+    if (enLinks.length === 1) {
+      const enLink = enLinks[0];
+      const enHref = enLink.href || '';
+      let frHref = enHref;
+      let isFragment = isFragmentHref(enHref);
+      let isNode = isNodeHref(enHref);
+      if (isNode) {
+        frHref = convertNodeHrefToFrench(enHref);
+      } else if (!isFragment && enHref) {
+        frHref = formatFrenchRootRelativeLink(enHref);
+      }
+      activeSpans.push({
+        type: 'a',
+        text: newText,
+        href: frHref,
+        isFragment,
+        isNodeLink: isNode,
+      });
+    }
   }
 
   // Disallow bold (<strong>) spans inside <th> cells
@@ -653,6 +767,7 @@ function replaceBlockTextPreservingLinks(
   // If no active spans and no footnotes to apply, simply set textContent
   if (activeSpans.length === 0 && blockFootnotes.length === 0) {
     el.replaceChildren(document.createTextNode(newText));
+    childLists.forEach((cl) => el.appendChild(cl));
     if (isTh) cleanThTags(el);
     return { unresolvedLinks };
   }
@@ -686,9 +801,12 @@ function replaceBlockTextPreservingLinks(
         const spanIndex = parseInt(spanMatch[1], 10);
         const span = activeSpans[spanIndex];
         const spanEl = document.createElement(
-          span.type === 'a' ? 'a' : span.type === 'strong' ? 'strong' : 'em'
+          span.type === 'a' ? 'a' : span.type === 'strong' ? 'strong' : span.type === 'span' ? 'span' : 'em'
         );
         spanEl.textContent = span.text;
+        if (span.lang) {
+          spanEl.setAttribute('lang', span.lang);
+        }
         if (span.type === 'a') {
           if (span.isFragment) {
             spanEl.setAttribute('href', span.href || '#');
@@ -709,12 +827,14 @@ function replaceBlockTextPreservingLinks(
         el.appendChild(document.createTextNode(part));
       }
     });
+    childLists.forEach((cl) => el.appendChild(cl));
     if (isTh) cleanThTags(el);
     return { unresolvedLinks };
   }
 
   // Fallback: render clean text without appending any stray English spans
   el.replaceChildren(document.createTextNode(newText));
+  childLists.forEach((cl) => el.appendChild(cl));
   if (isTh) cleanThTags(el);
   return { unresolvedLinks };
 }
@@ -770,8 +890,36 @@ function getBlockMatchScore(enTag, frTag, enBlock, frBlock, enBlocks = [], frBlo
     if (enIsFnContent !== frIsFnContent) return -6;
   }
 
-  if (enTag === frTag) return 2;
-  if (isHeadingTag(enTag) && isHeadingTag(frTag)) return 1.5;
+  // Exact tag match (e.g. p === p, li === li, h2 === h2)
+  if (enTag === frTag) return 2.5;
+
+  // Heading to heading (e.g. h2 to h3 or h1 to h2)
+  if (isHeadingTag(enTag) && isHeadingTag(frTag)) return 1.8;
+
+  // Cross-tag matches for unformatted Word documents:
+  // When Word document has plain paragraphs (<p>) where English has list items (<li>), table cells (<td>/<th>),
+  // definition items (<dd>/<dt>), or summary/blockquotes, give a positive compatibility score so sequence alignment succeeds.
+  const isEnContentTag = ['li', 'p', 'td', 'th', 'dd', 'dt', 'figcaption', 'blockquote', 'summary'].includes(enTag);
+  const isFrContentTag = ['li', 'p', 'td', 'th', 'dd', 'dt', 'figcaption', 'blockquote', 'summary'].includes(frTag);
+
+  if (isEnContentTag && isFrContentTag) {
+    // List item to paragraph or paragraph to list item
+    if ((enTag === 'li' && frTag === 'p') || (enTag === 'p' && frTag === 'li')) {
+      return 1.2;
+    }
+    // Heading in Word doc matching a content paragraph/list in English, or vice versa
+    if (isHeadingTag(enTag) || isHeadingTag(frTag)) {
+      return 0.5;
+    }
+    // Generic content block cross-match
+    return 1.0;
+  }
+
+  // Minor compatibility between headings and content blocks if Word formatting stripped heading styles
+  if ((isHeadingTag(enTag) && isFrContentTag) || (isEnContentTag && isHeadingTag(frTag))) {
+    return 0.3;
+  }
+
   return -1;
 }
 
@@ -860,39 +1008,43 @@ function describeStyleMismatch(enTag, frTag) {
   const frHeading = isHeadingTag(frTag);
   if (enHeading && !frHeading) {
     return (
-      'The English HTML has this as a heading (<' +
+      'The English HTML has this as <' +
       enTag +
-      '>), but the matching paragraph in the French Word document isn\'t styled as a heading — it came through as plain text (<' +
+      '>, but the Word paragraph came through as plain text (<' +
       frTag +
-      '>). In Word, apply the Heading ' +
-      enTag.slice(1) +
-      ' style to this paragraph so it matches.'
+      '>). Symmetra automatically formats the French output using the proper <' +
+      enTag +
+      '> structure.'
     );
   }
   if (!enHeading && frHeading) {
     return (
-      'The matching paragraph in the French Word document is styled as a heading (<' +
+      'The French Word paragraph was styled as <' +
       frTag +
-      '>), but the English HTML has this as plain text (<' +
+      '>, but the English HTML uses <' +
       enTag +
-      '>). Double-check whether the Word paragraph should be a heading, or if the style was applied by mistake.'
+      '>. Symmetra maintains the English <' +
+      enTag +
+      '> structure in the French output.'
     );
   }
   if (enHeading && frHeading) {
     return (
-      'Heading level mismatch: the English HTML uses <' +
+      'Heading level difference: English HTML uses <' +
       enTag +
-      '> but the French Word paragraph is styled as <' +
+      '> while French Word paragraph uses <' +
       frTag +
-      '>. Apply the same heading level in Word.'
+      '>. Symmetra preserves the English <' +
+      enTag +
+      '> heading level in the French output.'
     );
   }
   return (
-    'The English HTML has this as <' +
+    'The English HTML uses <' +
     enTag +
-    '>, but the matching French Word paragraph came through as <' +
+    '> while the French Word document came through as <' +
     frTag +
-    '>. Check the paragraph style applied in Word.'
+    '>. Symmetra preserves the English structure.'
   );
 }
 
@@ -946,7 +1098,7 @@ function computeIssues(
           en.tag +
           '> "' +
           issueSnippet(en.text) +
-          '" has no matching French content in document.',
+          '" — Filled with French filler placeholder [TRADUCTION MANQUANTE : ...] to preserve layout.',
       });
     }
   });
@@ -1056,9 +1208,8 @@ html, body {
 }
 
 body {
-  padding: 34px !important;
-  padding-top: 40vh !important;
-  padding-bottom: 40vh !important;
+  padding: 24px 28px !important;
+  padding-bottom: 30vh !important;
   font-family: "Noto Sans", "Helvetica Neue", Arial, sans-serif !important;
   font-size: 16px !important;
   line-height: 1.5 !important;
@@ -1610,6 +1761,12 @@ summary:hover {
   position: relative;
 }
 
+.gc-li-content {
+  display: inline-block;
+  border-radius: 2px;
+  vertical-align: baseline;
+}
+
 .gc-swap-editable:hover {
   cursor: text;
 }
@@ -1622,6 +1779,19 @@ summary:hover {
   outline: 2px solid #8b5cf6 !important;
   outline-offset: 3px;
   background: transparent !important;
+}
+
+.gc-swap-missing {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-left: 3px solid #f59e0b !important;
+  color: #fbbf24 !important;
+  padding-left: 6px !important;
+  border-radius: 2px;
+}
+body.gc-light-mode .gc-swap-missing {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-left: 3px solid #d97706 !important;
+  color: #92400e !important;
 }
 
 body.mode-focus [data-swap-index] {
@@ -1652,6 +1822,7 @@ const state = {
   enBlocks: [],
   enParsed: null,
   frDocxName: '',
+  frRawDocxHtml: '',
   frBlocks: [],
   alignRows: [],
   alignPairs: [],
@@ -1664,6 +1835,7 @@ const state = {
   syncPaused: false,
   focusMode: false,
   blurMode: false,
+  showWordDocView: false,
   outputHtml: '',
   outputTab: 'preview', // 'preview' | 'code'
   frViewMode: 'visual', // 'visual' | 'code'
@@ -1696,8 +1868,12 @@ const collapseSourcesBtn = document.getElementById('collapseSourcesBtn');
 
 const alignBtn = document.getElementById('alignBtn');
 const previewSection = document.getElementById('previewSection');
+const toggleWordDocBtn = document.getElementById('toggleWordDocBtn');
 const toggleFocusMode = document.getElementById('toggleFocusMode');
 const toggleBlurMode = document.getElementById('toggleBlurMode');
+const openQaDiffBtn = document.getElementById('openQaDiffBtn');
+const openTypographyBtn = document.getElementById('openTypographyBtn');
+const openLangEnBtn = document.getElementById('openLangEnBtn');
 const openControlsModalBtn = document.getElementById('openControlsModalBtn');
 const closeControlsModalBtn = document.getElementById('closeControlsModalBtn');
 const dismissControlsModalBtn = document.getElementById('dismissControlsModalBtn');
@@ -1713,6 +1889,13 @@ const enSyncStatus = document.getElementById('enSyncStatus');
 const frSyncStatus = document.getElementById('frSyncStatus');
 const enPreviewFrame = document.getElementById('enPreviewFrame');
 const frPreviewFrame = document.getElementById('frPreviewFrame');
+
+// Third Pane (Unmodified Original Word Document) Elements
+const docxPreviewPane = document.getElementById('docxPreviewPane');
+const docxPaneTitle = document.getElementById('docxPaneTitle');
+const docxBlockCountBadge = document.getElementById('docxBlockCountBadge');
+const closeWordDocPaneBtn = document.getElementById('closeWordDocPaneBtn');
+const docxPreviewFrame = document.getElementById('docxPreviewFrame');
 
 // French Pane View Toggle & Code View Elements
 const frPaneTitle = document.getElementById('frPaneTitle');
@@ -1734,6 +1917,10 @@ const closeDrawerBtn = document.getElementById('closeDrawerBtn');
 
 const healthPill = document.getElementById('healthPill');
 const healthPillText = document.getElementById('healthPillText');
+const cQaDiff = document.getElementById('cQaDiff');
+const cTypo = document.getElementById('cTypo');
+const cLangEn = document.getElementById('cLangEn');
+const cTables = document.getElementById('cTables');
 const cEn = document.getElementById('cEn');
 const cFr = document.getElementById('cFr');
 const cMismatch = document.getElementById('cMismatch');
@@ -1741,6 +1928,8 @@ const cMissing = document.getElementById('cMissing');
 const cExtra = document.getElementById('cExtra');
 const cSkip = document.getElementById('cSkip');
 
+const splitActiveBlockBtn = document.getElementById('splitActiveBlockBtn');
+const mergeActiveBlockBtn = document.getElementById('mergeActiveBlockBtn');
 const activeBlockHudText = document.getElementById('activeBlockHudText');
 const activeBlockHudTag = document.getElementById('activeBlockHudTag');
 const blockJumpToggleBtn = document.getElementById('blockJumpToggleBtn');
@@ -1749,6 +1938,20 @@ const nextBlockBtn = document.getElementById('nextBlockBtn');
 const jumpForm = document.getElementById('jumpForm');
 const jumpInput = document.getElementById('jumpInput');
 const syncOffsetBadge = document.getElementById('syncOffsetBadge');
+
+// Split Block Modal Elements
+const splitBlockModal = document.getElementById('splitBlockModal');
+const splitBlockModalTitle = document.getElementById('splitBlockModalTitle');
+const splitBlockSubTitle = document.getElementById('splitBlockSubTitle');
+const splitOriginalText = document.getElementById('splitOriginalText');
+const splitPart1Text = document.getElementById('splitPart1Text');
+const splitPart2Text = document.getElementById('splitPart2Text');
+const closeSplitModalBtn = document.getElementById('closeSplitModalBtn');
+const cancelSplitModalBtn = document.getElementById('cancelSplitModalBtn');
+const confirmSplitBlockBtn = document.getElementById('confirmSplitBlockBtn');
+const splitBySentenceBtn = document.getElementById('splitBySentenceBtn');
+const splitByNewlineBtn = document.getElementById('splitByNewlineBtn');
+const splitByHalfBtn = document.getElementById('splitByHalfBtn');
 
 const downloadFrCodeBtn = document.getElementById('downloadFrCodeBtn');
 const toast = document.getElementById('toast');
@@ -1802,7 +2005,7 @@ function applyTheme(theme) {
 }
 
 function updateIframesTheme() {
-  [enPreviewFrame, frPreviewFrame].forEach((frame) => {
+  [enPreviewFrame, frPreviewFrame, docxPreviewFrame].forEach((frame) => {
     if (frame && frame.contentDocument && frame.contentDocument.body) {
       if (state.theme === 'light') {
         frame.contentDocument.body.classList.add('gc-light-mode');
@@ -1865,6 +2068,7 @@ function parseFrDocxHtml(rawDocxHtml, filename = 'Uploaded Document.docx') {
   const blocks = extractBlocks(doc.body);
 
   state.frDocxName = filename;
+  state.frRawDocxHtml = rawDocxHtml;
   state.frBlocks = blocks;
 
   renderDocxStat(blocks.length, filename);
@@ -1913,6 +2117,7 @@ function renderDocxStat(count, filename) {
     clr.addEventListener('click', () => {
       state.frBlocks = [];
       state.frDocxName = '';
+      state.frRawDocxHtml = '';
       docxStatWrap.innerHTML = '';
       if (docxFile) docxFile.value = '';
       if (condensedFrStat) {
@@ -2024,16 +2229,106 @@ function buildDualIframePreviews() {
   // Update block badges if present
   if (enBlockCountBadge) enBlockCountBadge.textContent = `${state.enBlocks.length} blocks`;
   if (frBlockCountBadge) frBlockCountBadge.textContent = `${state.frBlocks.length} blocks`;
+  if (docxBlockCountBadge) docxBlockCountBadge.textContent = `${state.frBlocks.length} blocks`;
 
   // English Frame Document
   const enDocHtml = buildFrameSource(state.enHtml, state.enBlocks, 'en');
   // French Frame Document (Cloned from English structure so alert boxes, panels, and layouts match 1:1)
   const frDocHtml = buildFrenchFrameSource(state.enHtml, state.enBlocks, state.frBlocks, state.alignPairs);
+  // Unmodified Original Word Document Frame
+  const docxDocHtml = buildRawDocxFrameSource(state.frRawDocxHtml);
 
   enPreviewFrame.srcdoc = enDocHtml;
   frPreviewFrame.srcdoc = frDocHtml;
+  if (docxPreviewFrame) {
+    docxPreviewFrame.srcdoc = docxDocHtml;
+  }
 
   setupIframeEventListeners();
+}
+
+function buildRawDocxFrameSource(rawDocxHtml) {
+  const html = rawDocxHtml || state.frRawDocxHtml || SAMPLE_FR_DOCX_HTML;
+  const isLight = state.theme === 'light';
+  const bodyClass = isLight ? 'gc-light-mode' : '';
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString('<html><head></head><body></body></html>', 'text/html');
+  doc.body.innerHTML = html;
+
+  // Format any links inside to root-relative
+  doc.body.querySelectorAll('a[href]').forEach((a) => {
+    const rawHref = a.getAttribute('href');
+    if (rawHref && !isFragmentHref(rawHref)) {
+      a.setAttribute('href', formatFrenchRootRelativeLink(rawHref));
+    }
+  });
+
+  // Tag every block in the raw docx with data-swap-index so it syncs and can be clicked to jump
+  const domBlocks = extractBlocks(doc.body);
+  domBlocks.forEach((b, idx) => {
+    tagElementAsSwapTarget(b.el, {
+      'data-swap-index': idx,
+      'data-docx-index': idx,
+    });
+  });
+
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    ${HIGHLIGHT_CSS}
+  </style>
+</head>
+<body class="${bodyClass}">
+  ${doc.body.innerHTML}
+  <script>
+    document.addEventListener('click', (e) => {
+      const target = e.target.closest('[data-swap-index]');
+      if (target) {
+        const rawIdx = target.getAttribute('data-swap-index');
+        const idx = parseInt(rawIdx, 10);
+        if (!isNaN(idx)) {
+          window.parent.postMessage({ type: 'symmetra-jump', side: 'docx', index: idx }, '*');
+        }
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function toggleWordDocView(forceState) {
+  state.showWordDocView = forceState !== undefined ? forceState : !state.showWordDocView;
+  const isShown = state.showWordDocView;
+  const workspaceEl = document.getElementById('workspace');
+  if (workspaceEl) {
+    workspaceEl.classList.toggle('has-word-doc', isShown);
+  }
+  if (docxPreviewPane) {
+    docxPreviewPane.style.display = isShown ? 'flex' : 'none';
+  }
+  if (toggleWordDocBtn) {
+    toggleWordDocBtn.classList.toggle('is-active', isShown);
+  }
+  if (isShown) {
+    if (docxPreviewFrame) {
+      docxPreviewFrame.srcdoc = buildRawDocxFrameSource(state.frRawDocxHtml);
+    }
+    if (docxBlockCountBadge) {
+      docxBlockCountBadge.textContent = `${state.frBlocks ? state.frBlocks.length : 0} blocks`;
+    }
+    setupIframeEventListeners();
+    setTimeout(() => {
+      applyActiveHighlight();
+      alignPreviewBlocks(state.activePreviewBlock || 0);
+    }, 100);
+    showToast('Word Document (original unmodified) view opened');
+  } else {
+    showToast('Word Document view closed');
+  }
 }
 
 function buildFrameSource(rawHtml, blocks, lang) {
@@ -2051,11 +2346,14 @@ function buildFrameSource(rawHtml, blocks, lang) {
   // Tag DOM nodes with data-swap-index and editable attributes
   const domBlocks = extractBlocks(doc.body);
   domBlocks.forEach((b, idx) => {
-    b.el.setAttribute('data-swap-index', String(idx));
-    if (lang === 'fr') {
-      b.el.setAttribute('contenteditable', 'true');
-      b.el.classList.add('gc-swap-editable');
-    }
+    tagElementAsSwapTarget(
+      b.el,
+      {
+        'data-swap-index': idx,
+        ...(lang === 'fr' ? { contenteditable: 'true' } : {}),
+      },
+      lang === 'fr' ? ['gc-swap-editable'] : []
+    );
   });
 
   const isLight = state.theme === 'light';
@@ -2125,16 +2423,31 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
     if (pair && pair.frIndex !== null && frBlocks[pair.frIndex]) {
       const frBlock = frBlocks[pair.frIndex];
       replaceBlockTextPreservingLinks(enBlock.el, frBlock.text, enBlock.attrTarget, frBlock.spans);
-      enBlock.el.setAttribute('data-swap-index', String(enIdx));
-      enBlock.el.setAttribute('data-fr-index', String(pair.frIndex));
-      enBlock.el.setAttribute('data-en-index', String(enIdx));
-      enBlock.el.setAttribute('contenteditable', 'true');
-      enBlock.el.classList.add('gc-swap-editable');
+      tagElementAsSwapTarget(
+        enBlock.el,
+        {
+          'data-swap-index': enIdx,
+          'data-fr-index': pair.frIndex,
+          'data-en-index': enIdx,
+          'contenteditable': 'true',
+        },
+        ['gc-swap-editable']
+      );
     } else {
-      enBlock.el.setAttribute('data-swap-index', String(enIdx));
-      enBlock.el.setAttribute('data-en-index', String(enIdx));
-      enBlock.el.setAttribute('contenteditable', 'true');
-      enBlock.el.classList.add('gc-swap-editable', 'gc-swap-missing');
+      // English block missing French translation in Word doc:
+      // Insert obvious French filler placeholder so rest of document doesn't get messed up
+      const fillerText = `[TRADUCTION MANQUANTE : ${enBlock.text}]`;
+      replaceBlockTextPreservingLinks(enBlock.el, fillerText, enBlock.attrTarget, enBlock.spans);
+      tagElementAsSwapTarget(
+        enBlock.el,
+        {
+          'data-swap-index': enIdx,
+          'data-en-index': enIdx,
+          'contenteditable': 'true',
+          'title': 'Traduction manquante dans le document Word - Cliquez pour saisir la traduction française',
+        },
+        ['gc-swap-editable', 'gc-swap-missing']
+      );
     }
   });
 
@@ -2214,13 +2527,16 @@ function buildFrenchFrameSourceFromHtml(rawHtml, frBlocks) {
     const pair = state.alignPairs ? state.alignPairs.find((p) => p.frIndex === frIdx && !p.skip) : null;
     const enIdx = pair && pair.enIndex !== null ? pair.enIndex : frIdx;
 
-    frBlock.el.setAttribute('data-swap-index', String(enIdx));
-    frBlock.el.setAttribute('data-fr-index', String(frIdx));
-    if (pair && pair.enIndex !== null) {
-      frBlock.el.setAttribute('data-en-index', String(pair.enIndex));
-    }
-    frBlock.el.setAttribute('contenteditable', 'true');
-    frBlock.el.classList.add('gc-swap-editable');
+    tagElementAsSwapTarget(
+      frBlock.el,
+      {
+        'data-swap-index': enIdx,
+        'data-fr-index': frIdx,
+        ...(pair && pair.enIndex !== null ? { 'data-en-index': pair.enIndex } : {}),
+        'contenteditable': 'true',
+      },
+      ['gc-swap-editable']
+    );
   });
 
   // Ensure all links on the French side are formatted as root-relative
@@ -2328,6 +2644,11 @@ function applyActiveHighlight() {
   highlightIndexInFrame(enPreviewFrame, state.activePreviewBlock);
   if (state.autoSync && !state.syncPaused) {
     highlightIndexInFrame(frPreviewFrame, state.activePreviewBlock + state.syncOffset);
+    if (state.showWordDocView && docxPreviewFrame) {
+      const pair = state.alignPairs.find((p) => p.enIndex === state.activePreviewBlock && !p.skip);
+      const docxIdx = pair && pair.frIndex !== null ? pair.frIndex : state.activePreviewBlock + state.syncOffset;
+      highlightIndexInFrame(docxPreviewFrame, docxIdx);
+    }
   }
 }
 
@@ -2488,6 +2809,39 @@ function alignPreviewBlocks(index) {
           }
         }
       }
+
+      // Synchronize Word Doc Pane if open
+      if (state.showWordDocView && docxPreviewFrame) {
+        try {
+          const docxDoc = docxPreviewFrame.contentDocument || docxPreviewFrame.contentWindow.document;
+          if (docxDoc) {
+            const docxScroll = docxDoc.scrollingElement || docxDoc.documentElement;
+            cancelSmoothFollowScroll(docxScroll);
+            programmaticScrollEls.add(docxScroll);
+
+            const pair = state.alignPairs.find((p) => p.enIndex === index && !p.skip);
+            const docxIdx = pair && pair.frIndex !== null ? pair.frIndex : frIndex;
+            const docxEl = docxDoc.querySelector(`[data-swap-index="${docxIdx}"]`);
+
+            if (docxEl) {
+              if (docxIdx === 0) {
+                docxScroll.scrollTop = 0;
+              } else if (state.frBlocks && docxIdx >= state.frBlocks.length - 1) {
+                docxScroll.scrollTop = Math.max(0, docxScroll.scrollHeight - docxScroll.clientHeight);
+              } else {
+                const docxRect = docxEl.getBoundingClientRect();
+                const docxTop = docxRect.top + docxScroll.scrollTop;
+                const docxMax = Math.max(0, docxScroll.scrollHeight - docxScroll.clientHeight);
+                const docxDestination = docxTop + docxRect.height / 2 - docxScroll.clientHeight / 2;
+                docxScroll.scrollTop = Math.max(0, Math.min(docxDestination, docxMax));
+              }
+            }
+            setTimeout(() => {
+              programmaticScrollEls.delete(docxScroll);
+            }, 80);
+          }
+        } catch (_) {}
+      }
     }
 
     setTimeout(() => {
@@ -2583,16 +2937,11 @@ function syncScroll(sourceFrame, targetFrame) {
     const maxScroll = Math.max(0, srcScroll.scrollHeight - srcScroll.clientHeight);
     const viewportCenter = srcScroll.scrollTop + srcScroll.clientHeight / 2;
 
-    // Pick the active block by which one has crossed a reading line at
-    // the vertical center of the viewport. This is monotonic in
-    // scrollTop, so a short block (e.g. a lone heading between a
-    // paragraph and a list) can never be jumped over between two scroll
-    // events the way a nearest-center comparison can, and it keeps the
-    // highlighted block centered on screen rather than pinned near the top.
+    // Pick active block
     let candidate = srcItems[0];
-    if (srcScroll.scrollTop <= 4) {
+    if (srcScroll.scrollTop <= 10) {
       candidate = srcItems[0];
-    } else if (maxScroll > 0 && srcScroll.scrollTop >= maxScroll - 4) {
+    } else if (maxScroll > 0 && srcScroll.scrollTop >= maxScroll - 10) {
       candidate = srcItems[srcItems.length - 1];
     } else {
       const topThreshold = viewportCenter;
@@ -2605,10 +2954,20 @@ function syncScroll(sourceFrame, targetFrame) {
       }
     }
 
-    const pixelOffset = viewportCenter - candidate.top;
+    const pixelOffset = viewportCenter - (candidate.top + candidate.height / 2);
     const sourceIndex = candidate.index;
     const isEn = sourceFrame === enPreviewFrame;
-    const enIndex = isEn ? sourceIndex : sourceIndex - state.syncOffset;
+    const isDocx = sourceFrame === docxPreviewFrame;
+
+    let enIndex;
+    if (isEn) {
+      enIndex = sourceIndex;
+    } else if (isDocx) {
+      const pair = state.alignPairs.find((p) => p.frIndex === sourceIndex && !p.skip);
+      enIndex = pair && pair.enIndex !== null ? pair.enIndex : sourceIndex - state.syncOffset;
+    } else {
+      enIndex = sourceIndex - state.syncOffset;
+    }
 
     state.lastKnownEnIndex = enIndex;
     state.activePreviewBlock = Math.max(0, Math.min(enIndex, state.enBlocks.length - 1));
@@ -2617,35 +2976,48 @@ function syncScroll(sourceFrame, targetFrame) {
     highlightIndexInFrame(sourceFrame, sourceIndex);
     updateActiveBlockHud(state.activePreviewBlock);
 
-    // If auto-sync is enabled and not paused with Alt, synchronize the target frame too
+    // If auto-sync is enabled and not paused with Alt, synchronize other frames too
     if (state.autoSync && !state.syncPaused) {
-      const targetIndex = isEn ? sourceIndex + state.syncOffset : enIndex;
-      highlightIndexInFrame(targetFrame, targetIndex);
-
-      const targetDoc = targetFrame.contentDocument || targetFrame.contentWindow.document;
-      if (!targetDoc) return;
-      const targetScroll = targetDoc.scrollingElement || targetDoc.documentElement;
-      const targetItems = getSyncItems(targetFrame);
-      if (!targetItems.length) return;
-
-      let targetItem = targetItems.find((it) => it.index === targetIndex);
-      if (!targetItem) {
-        targetItem = targetItems.reduce((best, it) =>
-          Math.abs(it.index - targetIndex) < Math.abs(best.index - targetIndex) ? it : best, targetItems[0]);
+      const targets = [];
+      if (sourceFrame !== enPreviewFrame) {
+        targets.push({ frame: enPreviewFrame, index: state.activePreviewBlock });
+      }
+      if (sourceFrame !== frPreviewFrame) {
+        targets.push({ frame: frPreviewFrame, index: state.activePreviewBlock + state.syncOffset });
+      }
+      if (state.showWordDocView && docxPreviewFrame && sourceFrame !== docxPreviewFrame) {
+        const pair = state.alignPairs.find((p) => p.enIndex === state.activePreviewBlock && !p.skip);
+        const docxIdx = pair && pair.frIndex !== null ? pair.frIndex : state.activePreviewBlock + state.syncOffset;
+        targets.push({ frame: docxPreviewFrame, index: docxIdx });
       }
 
-      const targetMax = Math.max(0, targetScroll.scrollHeight - targetScroll.clientHeight);
+      targets.forEach(({ frame: tFrame, index: tIndex }) => {
+        highlightIndexInFrame(tFrame, tIndex);
+        const tDoc = tFrame.contentDocument || tFrame.contentWindow.document;
+        if (!tDoc) return;
+        const tScroll = tDoc.scrollingElement || tDoc.documentElement;
+        const tItems = getSyncItems(tFrame);
+        if (!tItems.length) return;
 
-      let destination;
-      if (srcScroll.scrollTop <= 30 && state.syncOffset === 0) {
-        destination = 0;
-      } else if (maxScroll > 0 && srcScroll.scrollTop >= maxScroll - 30 && state.syncOffset === 0) {
-        destination = targetMax;
-      } else {
-        destination = Math.max(0, Math.min(targetItem.top + pixelOffset - targetScroll.clientHeight / 2, targetMax));
-      }
+        let tItem = tItems.find((it) => it.index === tIndex);
+        if (!tItem) {
+          tItem = tItems.reduce((best, it) =>
+            Math.abs(it.index - tIndex) < Math.abs(best.index - tIndex) ? it : best, tItems[0]);
+        }
+        if (!tItem) return;
 
-      smoothFollowScroll(targetScroll, destination);
+        const tMax = Math.max(0, tScroll.scrollHeight - tScroll.clientHeight);
+        let destination;
+        if (srcScroll.scrollTop <= 10 && state.syncOffset === 0) {
+          destination = 0;
+        } else if (maxScroll > 0 && srcScroll.scrollTop >= maxScroll - 10 && state.syncOffset === 0) {
+          destination = tMax;
+        } else {
+          destination = Math.max(0, Math.min(tItem.top + tItem.height / 2 - tScroll.clientHeight / 2 + (pixelOffset || 0), tMax));
+        }
+
+        smoothFollowScroll(tScroll, destination);
+      });
     }
   } catch (_) {}
 }
@@ -2681,7 +3053,13 @@ function handleWheelNavigation(e, sourceFrameOverride = null) {
     let targetFrame = sourceFrameOverride || lastHoveredFrame;
     if (!targetFrame) {
       if (e.target && typeof e.target.closest === 'function') {
-        targetFrame = (e.target.closest('#frPreviewPane') || e.target.closest('#frPreviewFrame')) ? frPreviewFrame : enPreviewFrame;
+        if (e.target.closest('#docxPreviewPane') || e.target.closest('#docxPreviewFrame')) {
+          targetFrame = docxPreviewFrame;
+        } else if (e.target.closest('#frPreviewPane') || e.target.closest('#frPreviewFrame')) {
+          targetFrame = frPreviewFrame;
+        } else {
+          targetFrame = enPreviewFrame;
+        }
       } else {
         targetFrame = enPreviewFrame;
       }
@@ -2859,6 +3237,9 @@ function setupIframeEventListeners() {
 
   attachListeners(enPreviewFrame, frPreviewFrame);
   attachListeners(frPreviewFrame, enPreviewFrame);
+  if (docxPreviewFrame) {
+    attachListeners(docxPreviewFrame, enPreviewFrame);
+  }
 }
 
 // Global PostMessage receiver for iframe clicks and edits
@@ -2866,9 +3247,18 @@ window.addEventListener('message', (e) => {
   if (!e.data || typeof e.data !== 'object') return;
 
   if (e.data.type === 'symmetra-jump') {
-    const { index } = e.data;
+    const { side, index } = e.data;
     if (typeof index === 'number' && !isNaN(index)) {
-      jumpToBlock(index);
+      if (side === 'docx') {
+        const pair = state.alignPairs.find((p) => p.frIndex === index && !p.skip);
+        if (pair && pair.enIndex !== null) {
+          jumpToBlock(pair.enIndex);
+        } else {
+          highlightIndexInFrame(docxPreviewFrame, index);
+        }
+      } else {
+        jumpToBlock(index);
+      }
     }
   } else if (e.data.type === 'frEdit') {
     const { enIndex, frIndex, text } = e.data;
@@ -2878,6 +3268,17 @@ window.addEventListener('message', (e) => {
       const pair = state.alignPairs.find((p) => p.enIndex === enIndex);
       if (pair && pair.frIndex !== null && state.frBlocks[pair.frIndex]) {
         state.frBlocks[pair.frIndex].text = text;
+      } else if (pair && pair.frIndex === null) {
+        const enB = state.enBlocks[enIndex];
+        const newFrBlock = {
+          tag: enB ? enB.tag : 'p',
+          attrTarget: enB ? enB.attrTarget : 'text',
+          text: text,
+          spans: [],
+        };
+        const newFrIdx = state.frBlocks.length;
+        state.frBlocks.push(newFrBlock);
+        pair.frIndex = newFrIdx;
       }
     }
   }
@@ -2919,6 +3320,463 @@ function updateSyncStatusLabel() {
   }
 }
 
+// --- Feature 1: French Typography & Non-Breaking Spaces (&nbsp; / insécables) ---
+function findFrenchTypographyIssues(text) {
+  if (!text) return [];
+  const issues = [];
+  
+  // 1. Missing non-breaking space before : ; ! ?
+  const punctRegex = /([^\s\u00A0])\s*([:;?!])/g;
+  let match;
+  while ((match = punctRegex.exec(text)) !== null) {
+    issues.push({
+      type: 'punctuation',
+      label: `Missing insécable before '${match[2]}'`,
+      found: match[0],
+      fix: `${match[1]}\u00A0${match[2]}`
+    });
+  }
+
+  // 2. Missing non-breaking space inside guillemets « ... »
+  if (text.includes('«') && !text.includes('«\u00A0') && !text.includes('«&#160;') && !text.includes('«&nbsp;')) {
+    issues.push({
+      type: 'guillemet-open',
+      label: 'Missing insécable after «',
+      found: '«',
+      fix: '«\u00A0'
+    });
+  }
+  if (text.includes('»') && !text.includes('\u00A0»') && !text.includes('&#160;»') && !text.includes('&nbsp;»')) {
+    issues.push({
+      type: 'guillemet-close',
+      label: 'Missing insécable before »',
+      found: '»',
+      fix: '\u00A0»'
+    });
+  }
+
+  // 3. Currency symbol without non-breaking space (e.g. "10 $" or "10$")
+  const currRegex = /(\d)\s*([$€])/g;
+  while ((match = currRegex.exec(text)) !== null) {
+    if (!match[0].includes('\u00A0')) {
+      issues.push({
+        type: 'currency',
+        label: `Missing insécable before currency '${match[2]}'`,
+        found: match[0],
+        fix: `${match[1]}\u00A0${match[2]}`
+      });
+    }
+  }
+
+  // 4. Percentage symbol without non-breaking space (e.g. "10 %" or "10%")
+  const pctRegex = /(\d)\s*%/g;
+  while ((match = pctRegex.exec(text)) !== null) {
+    if (!match[0].includes('\u00A0')) {
+      issues.push({
+        type: 'percent',
+        label: `Missing insécable before '%'`,
+        found: match[0],
+        fix: `${match[1]}\u00A0%`
+      });
+    }
+  }
+
+  return issues;
+}
+
+function computeTypographyAudit() {
+  const list = [];
+  state.frBlocks.forEach((b, frIdx) => {
+    const issues = findFrenchTypographyIssues(b.text);
+    const fixedText = applyFrenchTypographyRules(b.text);
+    if (issues.length > 0 || fixedText !== b.text) {
+      list.push({
+        frIndex: frIdx,
+        originalText: b.text,
+        fixedText,
+        issues,
+      });
+    }
+  });
+  return list;
+}
+
+function fixFrenchTypographyBlock(frIdx) {
+  if (!state.frBlocks[frIdx]) return;
+  state.frBlocks[frIdx].text = applyFrenchTypographyRules(state.frBlocks[frIdx].text);
+  computeAlignment();
+  renderDrawerBody('typography');
+  showToast(`French typography fixed for block #${frIdx + 1}`);
+}
+
+function fixAllFrenchTypography() {
+  let count = 0;
+  state.frBlocks.forEach((b) => {
+    const fixed = applyFrenchTypographyRules(b.text);
+    if (fixed !== b.text) {
+      b.text = fixed;
+      count++;
+    }
+  });
+  computeAlignment();
+  renderDrawerBody('typography');
+  showToast(`Applied French typography & non-breaking spaces across ${count} block(s)!`);
+}
+
+// --- Feature 2: Smart Language Attribute (lang="en") Inserter ---
+const COMMON_EN_TERMS = [
+  'Social Insurance Number',
+  'Employment Insurance',
+  'Canada Revenue Agency',
+  'Record of Employment',
+  'Direct Deposit',
+  'My Account',
+  'My Service Canada Account',
+  'Job Bank',
+  'Public Service Commission',
+  'Treasury Board of Canada Secretariat',
+  'Canada.ca',
+  'GCKey',
+  'SIN',
+  'EI',
+  'CRA',
+  'ROE',
+  'ROA',
+  'CPP',
+  'OAS',
+  'GIS',
+  'T4',
+  'T5',
+  'GST',
+  'HST',
+  'CCB',
+  'WET',
+  'WCAG',
+  'IT',
+  'FAQ'
+];
+
+function detectEnglishTerms(frBlock) {
+  const text = frBlock.text || '';
+  const detected = [];
+
+  COMMON_EN_TERMS.forEach((term) => {
+    const regex = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'g');
+    if (regex.test(text)) {
+      const alreadyTagged = (frBlock.spans || []).some(
+        (s) => s.lang === 'en' && s.text.toLowerCase() === term.toLowerCase()
+      );
+      if (!alreadyTagged) {
+        detected.push({
+          term,
+          type: 'acronym_or_term',
+        });
+      }
+    }
+  });
+
+  // Also detect quoted English phrases: e.g. "..."
+  const quoteRegex = /"([^"]{3,60})"/g;
+  let qMatch;
+  while ((qMatch = quoteRegex.exec(text)) !== null) {
+    const inside = qMatch[1].trim();
+    if (/^[A-Za-z0-9\s.,'-]+$/.test(inside) && !COMMON_EN_TERMS.includes(inside)) {
+      const alreadyTagged = (frBlock.spans || []).some(
+        (s) => s.lang === 'en' && s.text.toLowerCase() === inside.toLowerCase()
+      );
+      if (!alreadyTagged) {
+        detected.push({
+          term: inside,
+          type: 'english_quote',
+        });
+      }
+    }
+  }
+
+  return detected;
+}
+
+function computeLangEnAudit() {
+  const results = [];
+  state.frBlocks.forEach((b, frIdx) => {
+    const terms = detectEnglishTerms(b);
+    if (terms.length > 0) {
+      results.push({
+        frIndex: frIdx,
+        block: b,
+        terms,
+      });
+    }
+  });
+  return results;
+}
+
+function tagEnglishTermInBlock(frIdx, term) {
+  const block = state.frBlocks[frIdx];
+  if (!block) return;
+  if (!block.spans) block.spans = [];
+  block.spans.push({
+    type: 'span',
+    lang: 'en',
+    text: term,
+  });
+  computeAlignment();
+  renderDrawerBody('lang-en');
+  showToast(`Wrapped "${term}" with <span lang="en">`);
+}
+
+function tagAllEnglishTerms() {
+  const audit = computeLangEnAudit();
+  let count = 0;
+  audit.forEach(({ frIndex, terms }) => {
+    const block = state.frBlocks[frIndex];
+    if (!block.spans) block.spans = [];
+    terms.forEach(({ term }) => {
+      block.spans.push({
+        type: 'span',
+        lang: 'en',
+        text: term,
+      });
+      count++;
+    });
+  });
+  computeAlignment();
+  renderDrawerBody('lang-en');
+  showToast(`Wrapped ${count} English term(s) with <span lang="en">!`);
+}
+
+// --- Feature 3: Table & List Integrity Matrix (GC / WET WCAG AA) ---
+function computeTablesAndListsAudit() {
+  const tables = [];
+  const lists = [];
+
+  // Parse English HTML to inspect table structure
+  const rawHtml = state.enHtml || (state.enParsed && state.enParsed.rawHtml) || '';
+  if (rawHtml) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(rawHtml, 'text/html');
+    const tableEls = Array.from(doc.querySelectorAll('table'));
+    tableEls.forEach((tbl, tIdx) => {
+      const ths = Array.from(tbl.querySelectorAll('th'));
+      const tds = Array.from(tbl.querySelectorAll('td'));
+      const rows = Array.from(tbl.querySelectorAll('tr'));
+      const hasCaption = !!tbl.querySelector('caption');
+      const hasScope = ths.length > 0 && ths.every((th) => th.hasAttribute('scope') || th.hasAttribute('id'));
+      const hasHeaders = tds.some((td) => td.hasAttribute('headers'));
+      const colspans = Array.from(tbl.querySelectorAll('[colspan], [rowspan]'));
+
+      tables.push({
+        tableIndex: tIdx + 1,
+        caption: hasCaption ? tbl.querySelector('caption').textContent.trim() : 'Standard Table',
+        rowCount: rows.length,
+        colHeaderCount: ths.length,
+        cellCount: tds.length,
+        hasScope,
+        hasHeaders,
+        complexSpans: colspans.length,
+        wcagCompliant: hasScope || hasHeaders,
+      });
+    });
+
+    const listEls = Array.from(doc.querySelectorAll('ul, ol, dl'));
+    listEls.forEach((listEl, lIdx) => {
+      const tag = listEl.tagName.toLowerCase();
+      const items = Array.from(listEl.children).filter((c) => ['li', 'dt', 'dd'].includes(c.tagName.toLowerCase()));
+      const isUnstyled = listEl.classList.contains('list-unstyled');
+      lists.push({
+        listIndex: lIdx + 1,
+        tag,
+        itemCount: items.length,
+        isUnstyled,
+        firstItem: items[0] ? items[0].textContent.trim().substring(0, 45) + '...' : 'Empty list',
+      });
+    });
+  }
+
+  return { tables, lists };
+}
+
+// --- Feature 4: Side-by-Side "Diff & Sync" QA Inspector ---
+function computeQaDiffAudit() {
+  const qaIssues = [];
+
+  // 1. Link symmetry check
+  state.alignPairs.forEach((pair) => {
+    const enB = state.enBlocks[pair.enIndex];
+    const frB = state.frBlocks[pair.frIndex];
+    if (!enB || !frB) return;
+
+    const enLinks = (enB.spans || []).filter((s) => s.type === 'a');
+    const frLinks = (frB.spans || []).filter((s) => s.type === 'a');
+
+    if (enLinks.length > 0 && frLinks.length === 0) {
+      qaIssues.push({
+        type: 'missing_fr_link',
+        severity: 'warn',
+        enIndex: pair.enIndex,
+        frIndex: pair.frIndex,
+        title: `Block #${pair.enIndex + 1}: Missing French link tag`,
+        detail: `English has link "${enLinks[0].text}" (${enLinks[0].href}), but French translation text has no anchor span.`,
+        action: 'Preserve EN Link skeleton',
+      });
+    }
+  });
+
+  // 2. Footnote balance check
+  const enFnCount = (state.enHtml.match(/class="fn-lnk"/g) || []).length;
+  const frFnCount = (state.frBlocks.reduce((acc, b) => acc + (b.text.match(/Note de bas de page \d+/gi) || []).length, 0));
+  if (enFnCount > 0 && enFnCount !== frFnCount) {
+    qaIssues.push({
+      type: 'fn_mismatch',
+      severity: 'info',
+      enIndex: 0,
+      frIndex: 0,
+      title: `Footnote Count (${enFnCount} EN vs ${frFnCount} FR detected)`,
+      detail: `Ensure all footnote callouts (Note de bas de page) align with corresponding English footnotes.`,
+      action: 'Verify Footnotes',
+    });
+  }
+
+  // 3. Length divergence check (> 2.2x ratio)
+  state.alignPairs.forEach((pair) => {
+    const enB = state.enBlocks[pair.enIndex];
+    const frB = state.frBlocks[pair.frIndex];
+    if (!enB || !frB) return;
+    if (enB.text.length > 30 && frB.text.length > 30) {
+      const ratio = frB.text.length / enB.text.length;
+      if (ratio > 2.2 || ratio < 0.4) {
+        qaIssues.push({
+          type: 'length_divergence',
+          severity: 'info',
+          enIndex: pair.enIndex,
+          frIndex: pair.frIndex,
+          title: `Block #${pair.enIndex + 1}: High text length difference (${Math.round(ratio * 100)}%)`,
+          detail: `EN (${enB.text.length} chars): "${issueSnippet(enB.text, 50)}" vs FR (${frB.text.length} chars): "${issueSnippet(frB.text, 50)}"`,
+          action: 'Inspect block',
+        });
+      }
+    }
+  });
+
+  return qaIssues;
+}
+
+// --- Feature 5: Batch / Partial Section Re-alignment (Split & Merge Blocks) ---
+function openSplitBlockModal(targetFrIdx) {
+  if (targetFrIdx === undefined || targetFrIdx === null) {
+    const pair = state.alignPairs.find((p) => p.enIndex === state.activePreviewBlock);
+    targetFrIdx = pair ? pair.frIndex : state.activePreviewBlock;
+  }
+  if (!state.frBlocks[targetFrIdx]) {
+    showToast('Select a valid block to split');
+    return;
+  }
+
+  state.splitBlockIndex = targetFrIdx;
+  const block = state.frBlocks[targetFrIdx];
+  if (splitBlockSubTitle) {
+    splitBlockSubTitle.textContent = `Splitting French block #${targetFrIdx + 1} (<${block.tag}>)`;
+  }
+  if (splitOriginalText) {
+    splitOriginalText.value = block.text;
+  }
+
+  const text = block.text;
+  let part1 = '';
+  let part2 = '';
+  const periodIdx = text.indexOf('. ');
+  if (periodIdx !== -1) {
+    part1 = text.substring(0, periodIdx + 1).trim();
+    part2 = text.substring(periodIdx + 2).trim();
+  } else {
+    const half = Math.floor(text.length / 2);
+    const spaceIdx = text.indexOf(' ', half);
+    if (spaceIdx !== -1) {
+      part1 = text.substring(0, spaceIdx).trim();
+      part2 = text.substring(spaceIdx + 1).trim();
+    } else {
+      part1 = text;
+      part2 = '';
+    }
+  }
+
+  if (splitPart1Text) splitPart1Text.value = part1;
+  if (splitPart2Text) splitPart2Text.value = part2;
+
+  if (splitBlockModal) {
+    splitBlockModal.style.display = 'flex';
+    requestAnimationFrame(() => {
+      splitBlockModal.classList.add('is-open');
+      if (splitPart1Text) splitPart1Text.focus();
+    });
+  }
+}
+
+function closeSplitBlockModal() {
+  if (!splitBlockModal) return;
+  splitBlockModal.classList.remove('is-open');
+  setTimeout(() => {
+    splitBlockModal.style.display = 'none';
+    state.splitBlockIndex = null;
+  }, 200);
+}
+
+function applySplitBlock() {
+  const targetIdx = state.splitBlockIndex;
+  if (targetIdx === null || !state.frBlocks[targetIdx]) {
+    closeSplitBlockModal();
+    return;
+  }
+
+  const p1 = (splitPart1Text.value || '').trim();
+  const p2 = (splitPart2Text.value || '').trim();
+
+  if (!p1 || !p2) {
+    showToast('Both split portions must contain text');
+    return;
+  }
+
+  const originalBlock = state.frBlocks[targetIdx];
+  const block1 = {
+    ...originalBlock,
+    text: p1,
+    spans: originalBlock.spans ? [...originalBlock.spans] : [],
+  };
+  const block2 = {
+    ...originalBlock,
+    text: p2,
+    spans: [],
+  };
+
+  state.frBlocks.splice(targetIdx, 1, block1, block2);
+  closeSplitBlockModal();
+  computeAlignment();
+  showToast(`French block #${targetIdx + 1} split into 2 blocks! Alignment updated.`);
+}
+
+function mergeWithNextBlock(targetFrIdx) {
+  if (targetFrIdx === undefined || targetFrIdx === null) {
+    const pair = state.alignPairs.find((p) => p.enIndex === state.activePreviewBlock);
+    targetFrIdx = pair ? pair.frIndex : state.activePreviewBlock;
+  }
+  if (!state.frBlocks[targetFrIdx] || !state.frBlocks[targetFrIdx + 1]) {
+    showToast('No subsequent block available to merge with');
+    return;
+  }
+
+  const b1 = state.frBlocks[targetFrIdx];
+  const b2 = state.frBlocks[targetFrIdx + 1];
+
+  b1.text = `${b1.text} ${b2.text}`.trim();
+  if (b2.spans && b2.spans.length > 0) {
+    b1.spans = (b1.spans || []).concat(b2.spans);
+  }
+
+  state.frBlocks.splice(targetFrIdx + 1, 1);
+  computeAlignment();
+  showToast(`Merged block #${targetFrIdx + 1} with block #${targetFrIdx + 2}`);
+}
+
 // Bottom Stats HUD and Inspector Drawer
 function renderStatsBar() {
   const nEn = state.enBlocks.length;
@@ -2929,23 +3787,42 @@ function renderStatsBar() {
   const nSkip = state.alignRows.filter((r) => r.skip).length;
   const nMatched = state.alignPairs.length;
 
-  cEn.textContent = String(nEn);
-  cFr.textContent = String(nFr);
-  cMismatch.textContent = String(nMis);
-  cMissing.textContent = String(nMiss);
-  cExtra.textContent = String(nExt);
-  cSkip.textContent = String(nSkip);
+  const typoIssues = computeTypographyAudit();
+  const langEnIssues = computeLangEnAudit();
+  const tableData = computeTablesAndListsAudit();
+  const qaIssues = computeQaDiffAudit();
+
+  if (cEn) cEn.textContent = String(nEn);
+  if (cFr) cFr.textContent = String(nFr);
+  if (cMismatch) cMismatch.textContent = String(nMis);
+  if (cMissing) cMissing.textContent = String(nMiss);
+  if (cExtra) cExtra.textContent = String(nExt);
+  if (cSkip) cSkip.textContent = String(nSkip);
+  if (cQaDiff) cQaDiff.textContent = String(qaIssues.length);
+  if (cTypo) cTypo.textContent = String(typoIssues.length);
+  if (cLangEn) cLangEn.textContent = String(langEnIssues.length);
+  if (cTables) cTables.textContent = String(tableData.tables.length + tableData.lists.length);
 
   // Style tabs based on issue counts
   const tabMis = document.getElementById('tabMismatch');
   const tabMiss = document.getElementById('tabMissing');
   const tabExt = document.getElementById('tabExtra');
+  const tabQa = document.getElementById('tabQaDiff');
+  const tabTypoEl = document.getElementById('tabTypography');
+  const tabLangEl = document.getElementById('tabLangEn');
 
   if (tabMis) tabMis.classList.toggle('has-issues', nMis > 0);
   if (tabMiss) tabMiss.classList.toggle('has-danger', nMiss > 0);
   if (tabExt) tabExt.classList.toggle('has-issues', nExt > 0);
+  if (tabQa) tabQa.classList.toggle('has-issues', qaIssues.length > 0);
+  if (tabTypoEl) tabTypoEl.classList.toggle('has-issues', typoIssues.length > 0);
+  if (tabLangEl) tabLangEl.classList.toggle('has-issues', langEnIssues.length > 0);
 
   // Update Drawer Tab counters
+  const dQa = document.getElementById('drawerTabQaDiff');
+  const dTypo = document.getElementById('drawerTabTypography');
+  const dLang = document.getElementById('drawerTabLangEn');
+  const dTables = document.getElementById('drawerTabTables');
   const dMis = document.getElementById('drawerTabMismatch');
   const dMiss = document.getElementById('drawerTabMissing');
   const dExt = document.getElementById('drawerTabExtra');
@@ -2953,6 +3830,10 @@ function renderStatsBar() {
   const dFr = document.getElementById('drawerTabFrTags');
   const dSkip = document.getElementById('drawerTabSkipped');
 
+  if (dQa) dQa.textContent = `QA & Diff (${qaIssues.length})`;
+  if (dTypo) dTypo.textContent = `French Typography (${typoIssues.length})`;
+  if (dLang) dLang.textContent = `Smart lang="en" (${langEnIssues.length})`;
+  if (dTables) dTables.textContent = `Tables & Lists (${tableData.tables.length + tableData.lists.length})`;
   if (dMis) dMis.textContent = `Mismatches (${nMis})`;
   if (dMiss) dMiss.textContent = `Missing FR (${nMiss})`;
   if (dExt) dExt.textContent = `Extra FR (${nExt})`;
@@ -2962,22 +3843,24 @@ function renderStatsBar() {
 
   // Overall Alignment Health Pill
   const hasErrors = nMiss > 0;
-  const hasWarnings = nMis > 0 || nExt > 0;
+  const hasWarnings = nMis > 0 || nExt > 0 || typoIssues.length > 0 || qaIssues.length > 0;
 
-  healthPill.className = 'preview-status-pill ' + (hasErrors ? 'status-danger' : hasWarnings ? 'status-warn' : 'status-clean');
-  
-  if (hasErrors) {
-    healthPill.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-rose-500"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" x2="12" y2="12"/><line x1="12" x2="12" y1="16" x2="12.01" y2="16"/></svg>
-      <span>${nMiss} missing block(s) • ${nMatched}/${nEn} matched</span>`;
-  } else if (hasWarnings) {
-    healthPill.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-amber-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" x2="13"/><line x1="12" x2="12" y1="17" x2="12.01" y2="17"/></svg>
-      <span>${nMis} style mismatch(es) • ${nMatched}/${nEn} matched</span>`;
-  } else {
-    healthPill.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
-      <span>100% Aligned • ${nMatched} blocks matched</span>`;
+  if (healthPill) {
+    healthPill.className = 'preview-status-pill ' + (hasErrors ? 'status-danger' : hasWarnings ? 'status-warn' : 'status-clean');
+    
+    if (hasErrors) {
+      healthPill.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-rose-500"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" x2="12" y2="12"/><line x1="12" x2="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>${nMiss} missing block(s) • ${nMatched}/${nEn} matched</span>`;
+    } else if (hasWarnings) {
+      healthPill.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-amber-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" x2="13"/><line x1="12" x2="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>${nMis > 0 ? `${nMis} mismatches` : typoIssues.length > 0 ? `${typoIssues.length} typo notices` : `${qaIssues.length} QA notice(s)`} • ${nMatched}/${nEn} matched</span>`;
+    } else {
+      healthPill.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+        <span>100% Aligned • ${nMatched} blocks matched</span>`;
+    }
   }
 
   updateActiveBlockHud(state.activePreviewBlock);
@@ -2986,7 +3869,7 @@ function renderStatsBar() {
 function openDrawer(category) {
   state.activeCategory = category;
   state.drawerOpen = true;
-  statDetailPanel.classList.add('show');
+  if (statDetailPanel) statDetailPanel.classList.add('show');
 
   // Update active state on segmented tabs
   document.querySelectorAll('.preview-segment-tab').forEach((tab) => {
@@ -3006,7 +3889,7 @@ function openDrawer(category) {
 
 function closeDrawer() {
   state.drawerOpen = false;
-  statDetailPanel.classList.remove('show');
+  if (statDetailPanel) statDetailPanel.classList.remove('show');
   document.querySelectorAll('.preview-segment-tab').forEach((tab) => {
     tab.classList.remove('is-active');
   });
@@ -3119,10 +4002,235 @@ function getDivergenceDiagnosticsHtml() {
 }
 
 function renderDrawerBody(category) {
+  if (!drawerBody) return;
   drawerBody.innerHTML = '';
   const diagHeader = getDivergenceDiagnosticsHtml();
 
-  if (category === 'en-tags' || category === 'fr-tags') {
+  if (category === 'qa-diff') {
+    const qaList = computeQaDiffAudit();
+    if (!qaList.length) {
+      drawerBody.innerHTML = `
+        ${diagHeader}
+        <div class="p-8 text-center">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-500 mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="text-sm font-bold text-text">Dual Preview QA &amp; Diff Clean</div>
+          <p class="text-xs text-text-secondary mt-1">All hyperlinks, footnote callouts, and structural elements are balanced between English and French.</p>
+        </div>`;
+    } else {
+      const rows = qaList
+        .map(
+          (qa, i) => `
+        <div class="issue-row issue-row-clickable" data-jump-en="${qa.enIndex}">
+          <div class="issue-side ${qa.severity === 'warn' ? 'warn' : 'info'}">${qa.type.toUpperCase()}</div>
+          <div>
+            <div class="issue-title">${escapeHtml(qa.title)}</div>
+            <div class="issue-detail">${escapeHtml(qa.detail)}</div>
+          </div>
+          <div class="issue-status">${qa.action}</div>
+          <div>
+            <button type="button" class="btn btn-secondary text-xs px-2.5 py-1">Jump →</button>
+          </div>
+        </div>`
+        )
+        .join('');
+
+      drawerBody.innerHTML = `
+        ${diagHeader}
+        <div class="p-3 bg-surface-soft border-b border-border flex items-center justify-between">
+          <span class="text-xs font-bold text-text">Side-by-Side QA Discrepancies (${qaList.length})</span>
+        </div>
+        <div>${rows}</div>`;
+    }
+  } else if (category === 'typography') {
+    const typoList = computeTypographyAudit();
+    if (!typoList.length) {
+      drawerBody.innerHTML = `
+        ${diagHeader}
+        <div class="p-8 text-center">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-500 mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="text-sm font-bold text-text">French Typography 100% Compliant</div>
+          <p class="text-xs text-text-secondary mt-1">All punctuation marks (: ; ! ?), currency symbols ($, €), percent signs (%), and guillemets (&#171; &#187;) have proper non-breaking spaces.</p>
+        </div>`;
+    } else {
+      const rows = typoList
+        .map(
+          (item) => `
+        <div class="p-3.5 border-b border-border bg-surface hover:bg-surface-hover/50 transition-colors flex items-start justify-between gap-3">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="tag tag-fr text-[10px]">FR #${item.frIndex + 1}</span>
+              <span class="text-xs font-bold text-text">${item.issues.map((iss) => iss.label).join(', ')}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs font-mono p-2 rounded bg-surface-soft border border-border">
+              <div>
+                <span class="text-text-muted text-[10px] block mb-0.5">CURRENT TEXT:</span>
+                <span class="text-rose-500 line-through">${escapeHtml(issueSnippet(item.originalText, 75))}</span>
+              </div>
+              <div>
+                <span class="text-text-muted text-[10px] block mb-0.5">SUGGESTED FRENCH TYPOGRAPHY:</span>
+                <span class="text-emerald-500 font-semibold">${escapeHtml(issueSnippet(item.fixedText, 75))}</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-col gap-1.5 pt-1">
+            <button type="button" class="btn btn-primary text-xs px-3 py-1 fix-typo-btn" data-fr-idx="${item.frIndex}">
+              Fix Typo
+            </button>
+            <button type="button" class="btn btn-secondary text-xs px-2.5 py-0.5 issue-row-clickable" data-jump-fr="${item.frIndex}">
+              Jump →
+            </button>
+          </div>
+        </div>`
+        )
+        .join('');
+
+      drawerBody.innerHTML = `
+        ${diagHeader}
+        <div class="p-3.5 bg-surface-soft border-b border-border flex items-center justify-between">
+          <div>
+            <div class="text-xs font-bold text-text">French Typography &amp; Non-Breaking Space Linter</div>
+            <div class="text-[11px] text-text-secondary">${typoList.length} block(s) require non-breaking spaces (&nbsp; / insécables)</div>
+          </div>
+          <button type="button" id="fixAllTypoBtn" class="btn btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Fix All Typography (${typoList.length})</span>
+          </button>
+        </div>
+        <div>${rows}</div>`;
+    }
+  } else if (category === 'lang-en') {
+    const langList = computeLangEnAudit();
+    if (!langList.length) {
+      drawerBody.innerHTML = `
+        ${diagHeader}
+        <div class="p-8 text-center">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-500 mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="text-sm font-bold text-text">Smart lang="en" Detection Complete</div>
+          <p class="text-xs text-text-secondary mt-1">No untranslated English acronyms or quotes without lang="en" tags found.</p>
+        </div>`;
+    } else {
+      const rows = langList
+        .map(
+          (item) => `
+        <div class="p-3.5 border-b border-border bg-surface hover:bg-surface-hover/50 transition-colors flex items-start justify-between gap-3">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="tag tag-fr text-[10px]">FR #${item.frIndex + 1}</span>
+              <span class="text-xs font-bold text-text">Detected English Terms (${item.terms.length})</span>
+            </div>
+            <div class="text-xs text-text-secondary mb-2 font-mono p-2 rounded bg-surface-soft border border-border">
+              "${escapeHtml(issueSnippet(item.block.text, 100))}"
+            </div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              ${item.terms
+                .map(
+                  (t) => `
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-600 dark:text-cyan-400 text-xs font-medium">
+                  <code>${escapeHtml(t.term)}</code>
+                  <button type="button" class="hover:underline font-bold text-[11px] ml-1 tag-single-lang-btn" data-fr-idx="${item.frIndex}" data-term="${escapeHtml(t.term)}">+ Wrap &lt;span lang="en"&gt;</button>
+                </span>`
+                )
+                .join('')}
+            </div>
+          </div>
+          <div class="flex flex-col gap-1.5 pt-1">
+            <button type="button" class="btn btn-secondary text-xs px-2.5 py-0.5 issue-row-clickable" data-jump-fr="${item.frIndex}">
+              Jump →
+            </button>
+          </div>
+        </div>`
+        )
+        .join('');
+
+      drawerBody.innerHTML = `
+        ${diagHeader}
+        <div class="p-3.5 bg-surface-soft border-b border-border flex items-center justify-between">
+          <div>
+            <div class="text-xs font-bold text-text">Smart Language Attribute (lang="en") Inserter</div>
+            <div class="text-[11px] text-text-secondary">${langList.length} French block(s) contain untagged English federal acronyms or quotes</div>
+          </div>
+          <button type="button" id="tagAllLangEnBtn" class="btn btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>Wrap All with &lt;span lang="en"&gt;</span>
+          </button>
+        </div>
+        <div>${rows}</div>`;
+    }
+  } else if (category === 'tables-lists') {
+    const { tables, lists } = computeTablesAndListsAudit();
+    drawerBody.innerHTML = `
+      ${diagHeader}
+      <div class="p-4 bg-surface-soft border-b border-border">
+        <div class="text-xs font-bold text-text mb-1">GC / WET Table &amp; List Integrity Matrix (WCAG 2.1 AA)</div>
+        <p class="text-xs text-text-secondary">Verifies cell-by-cell header mapping (scope="col", scope="row", headers="...") and list item preservation.</p>
+      </div>
+
+      <div class="p-4 space-y-4">
+        <!-- Tables Matrix -->
+        <div>
+          <h4 class="text-xs font-bold text-text uppercase tracking-wide text-text-muted mb-2">Tables in Document (${tables.length})</h4>
+          ${
+            tables.length === 0
+              ? '<div class="text-xs text-text-secondary p-3 rounded bg-surface border border-border">No tables found in English source HTML.</div>'
+              : `<div class="space-y-2">
+                ${tables
+                  .map(
+                    (tbl) => `
+                  <div class="p-3 rounded-lg bg-surface border border-border flex items-center justify-between">
+                    <div>
+                      <div class="font-semibold text-xs text-text">Table #${tbl.tableIndex}: "${escapeHtml(tbl.caption)}"</div>
+                      <div class="text-[11px] text-text-secondary mt-0.5">
+                        ${tbl.rowCount} rows • ${tbl.colHeaderCount} &lt;th&gt; headers • ${tbl.cellCount} &lt;td&gt; data cells ${tbl.complexSpans > 0 ? `• ${tbl.complexSpans} colspan/rowspan` : ''}
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="text-[11px] px-2 py-0.5 rounded font-semibold ${
+                        tbl.wcagCompliant
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                      }">
+                        ${tbl.wcagCompliant ? '✓ WCAG AA Headers Valid' : '⚠ Missing scope/headers'}
+                      </span>
+                    </div>
+                  </div>`
+                  )
+                  .join('')}
+              </div>`
+          }
+        </div>
+
+        <!-- Lists Matrix -->
+        <div>
+          <h4 class="text-xs font-bold text-text uppercase tracking-wide text-text-muted mb-2">Lists in Document (${lists.length})</h4>
+          ${
+            lists.length === 0
+              ? '<div class="text-xs text-text-secondary p-3 rounded bg-surface border border-border">No lists found in source HTML.</div>'
+              : `<div class="space-y-2">
+                ${lists
+                  .map(
+                    (lst) => `
+                  <div class="p-3 rounded-lg bg-surface border border-border flex items-center justify-between">
+                    <div>
+                      <div class="font-semibold text-xs text-text">&lt;${lst.tag}&gt; List #${lst.listIndex} (${lst.itemCount} items) ${lst.isUnstyled ? '<span class="text-xs text-indigo-400 ml-1">.list-unstyled</span>' : ''}</div>
+                      <div class="text-[11px] text-text-secondary mt-0.5">First item: "${escapeHtml(lst.firstItem)}"</div>
+                    </div>
+                    <span class="text-[11px] px-2 py-0.5 rounded font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      ✓ Skeleton Preserved
+                    </span>
+                  </div>`
+                  )
+                  .join('')}
+              </div>`
+          }
+        </div>
+      </div>`;
+  } else if (category === 'en-tags' || category === 'fr-tags') {
     const blocks = category === 'en-tags' ? state.enBlocks : state.frBlocks;
     const title = category === 'en-tags' ? 'English Source HTML Tag Breakdown' : 'French Word Document Tag Breakdown';
     const counts = {};
@@ -3265,6 +4373,39 @@ function renderDrawerBody(category) {
       }
     });
   });
+
+  // Attach Typography buttons inside drawer
+  drawerBody.querySelectorAll('.fix-typo-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const frIdx = parseInt(btn.getAttribute('data-fr-idx'), 10);
+      fixFrenchTypographyBlock(frIdx);
+    });
+  });
+
+  const fixAllTypoBtn = document.getElementById('fixAllTypoBtn');
+  if (fixAllTypoBtn) {
+    fixAllTypoBtn.addEventListener('click', () => {
+      fixAllFrenchTypography();
+    });
+  }
+
+  // Attach lang="en" buttons inside drawer
+  drawerBody.querySelectorAll('.tag-single-lang-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const frIdx = parseInt(btn.getAttribute('data-fr-idx'), 10);
+      const term = btn.getAttribute('data-term');
+      tagEnglishTermInBlock(frIdx, term);
+    });
+  });
+
+  const tagAllLangEnBtn = document.getElementById('tagAllLangEnBtn');
+  if (tagAllLangEnBtn) {
+    tagAllLangEnBtn.addEventListener('click', () => {
+      tagAllEnglishTerms();
+    });
+  }
 }
 
 function escapeHtml(text) {
@@ -3543,18 +4684,26 @@ function generateFrenchHtmlSource() {
     }
   } catch (_) {}
 
-  state.alignPairs.forEach((pair) => {
-    if (pair.enIndex !== null && pair.frIndex !== null && !pair.skip) {
-      const enTarget = enDocBlocks[pair.enIndex];
+  enDocBlocks.forEach((enTarget, enIdx) => {
+    const pair = state.alignPairs.find((p) => p.enIndex === enIdx && !p.skip);
+    if (pair && pair.frIndex !== null && state.frBlocks[pair.frIndex]) {
       const frBlock = state.frBlocks[pair.frIndex];
-      if (enTarget && frBlock) {
-        replaceBlockTextPreservingLinks(
-          enTarget.el,
-          frBlock.text,
-          enTarget.attrTarget,
-          frBlock.spans
-        );
-      }
+      replaceBlockTextPreservingLinks(
+        enTarget.el,
+        frBlock.text,
+        enTarget.attrTarget,
+        frBlock.spans
+      );
+    } else {
+      // English block missing French translation in Word doc:
+      // Insert obvious French filler placeholder so rest of exported document stays aligned
+      const fillerText = `[TRADUCTION MANQUANTE : ${enTarget.text}]`;
+      replaceBlockTextPreservingLinks(
+        enTarget.el,
+        fillerText,
+        enTarget.attrTarget,
+        enTarget.spans
+      );
     }
   });
 
@@ -3892,10 +5041,22 @@ function initEventListeners() {
   }
 
   // View Toolbar
+  if (toggleWordDocBtn) {
+    toggleWordDocBtn.addEventListener('click', () => {
+      toggleWordDocView();
+    });
+  }
+
+  if (closeWordDocPaneBtn) {
+    closeWordDocPaneBtn.addEventListener('click', () => {
+      toggleWordDocView(false);
+    });
+  }
+
   toggleFocusMode.addEventListener('click', () => {
     state.focusMode = !state.focusMode;
     toggleFocusMode.classList.toggle('is-active', state.focusMode);
-    [enPreviewFrame, frPreviewFrame].forEach((frame) => {
+    [enPreviewFrame, frPreviewFrame, docxPreviewFrame].forEach((frame) => {
       if (frame && frame.contentDocument && frame.contentDocument.body) {
         frame.contentDocument.body.classList.toggle('mode-focus', state.focusMode);
       }
@@ -3905,7 +5066,7 @@ function initEventListeners() {
   toggleBlurMode.addEventListener('click', () => {
     state.blurMode = !state.blurMode;
     toggleBlurMode.classList.toggle('is-active', state.blurMode);
-    [enPreviewFrame, frPreviewFrame].forEach((frame) => {
+    [enPreviewFrame, frPreviewFrame, docxPreviewFrame].forEach((frame) => {
       if (frame && frame.contentDocument && frame.contentDocument.body) {
         frame.contentDocument.body.classList.toggle('mode-blur', state.blurMode);
       }
@@ -3927,6 +5088,85 @@ function initEventListeners() {
       if (e.target === controlsModal) {
         closeControlsModal();
       }
+    });
+  }
+
+  // Split & Merge Actions & Modal Buttons
+  if (splitActiveBlockBtn) {
+    splitActiveBlockBtn.addEventListener('click', () => {
+      openSplitBlockModal(state.activePreviewBlock);
+    });
+  }
+  if (mergeActiveBlockBtn) {
+    mergeActiveBlockBtn.addEventListener('click', () => {
+      mergeWithNextBlock();
+    });
+  }
+  if (closeSplitModalBtn) {
+    closeSplitModalBtn.addEventListener('click', closeSplitBlockModal);
+  }
+  if (cancelSplitModalBtn) {
+    cancelSplitModalBtn.addEventListener('click', closeSplitBlockModal);
+  }
+  if (confirmSplitBlockBtn) {
+    confirmSplitBlockBtn.addEventListener('click', applySplitBlock);
+  }
+  if (splitBySentenceBtn) {
+    splitBySentenceBtn.addEventListener('click', () => {
+      const text = splitOriginalText ? splitOriginalText.value : '';
+      const periodIdx = text.indexOf('. ');
+      if (periodIdx !== -1) {
+        splitPart1Text.value = text.substring(0, periodIdx + 1).trim();
+        splitPart2Text.value = text.substring(periodIdx + 2).trim();
+      }
+    });
+  }
+  if (splitByNewlineBtn) {
+    splitByNewlineBtn.addEventListener('click', () => {
+      const text = splitOriginalText ? splitOriginalText.value : '';
+      const nlIdx = text.indexOf('\n');
+      if (nlIdx !== -1) {
+        splitPart1Text.value = text.substring(0, nlIdx).trim();
+        splitPart2Text.value = text.substring(nlIdx + 1).trim();
+      }
+    });
+  }
+  if (splitByHalfBtn) {
+    splitByHalfBtn.addEventListener('click', () => {
+      const text = splitOriginalText ? splitOriginalText.value : '';
+      const half = Math.floor(text.length / 2);
+      const spaceIdx = text.indexOf(' ', half);
+      if (spaceIdx !== -1) {
+        splitPart1Text.value = text.substring(0, spaceIdx).trim();
+        splitPart2Text.value = text.substring(spaceIdx + 1).trim();
+      }
+    });
+  }
+  if (splitBlockModal) {
+    splitBlockModal.addEventListener('click', (e) => {
+      if (e.target === splitBlockModal) {
+        closeSplitBlockModal();
+      }
+    });
+  }
+
+  // Toolbar Quick-Audit Category Buttons
+  if (openQaDiffBtn) {
+    openQaDiffBtn.addEventListener('click', () => {
+      if (state.drawerOpen && state.activeCategory === 'qa-diff') closeDrawer();
+      else openDrawer('qa-diff');
+    });
+  }
+  if (openTypographyBtn) {
+    openTypographyBtn.addEventListener('click', () => {
+      if (state.drawerOpen && state.activeCategory === 'typography') closeDrawer();
+      else openDrawer('typography');
+    });
+  }
+  if (openLangEnBtn) {
+    openLangEnBtn.addEventListener('click', () => {
+      if (state.drawerOpen && state.activeCategory === 'lang-en') closeDrawer();
+      else openDrawer('lang-en');
     });
   }
 
