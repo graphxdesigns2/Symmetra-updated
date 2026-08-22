@@ -93,9 +93,29 @@ function isFootnoteBoilerplateElement(el) {
 function isLeafBlock(el) {
   const tagName = el.tagName.toLowerCase();
   if (['img', 'input', 'textarea', 'button'].includes(tagName)) return true;
-  // If this is a list item <li> that contains sub-lists (<ul> or <ol>), it is treated as a valid content block
-  // for its own immediate text and links, while its child <li> items are also extracted as their own blocks.
-  if (tagName === 'li') return true;
+
+  if (tagName === 'li') {
+    // If this <li> contains child content block elements (such as <p>, <div>, <blockquote>, etc.)
+    // that are inside this <li> but NOT part of a nested sub-list <ul> or <ol>,
+    // then this <li> is a structural container and those inner <p> elements are the leaf blocks.
+    const nonListChildBlocks = Array.from(el.querySelectorAll(BLOCK_SELECTOR)).filter((child) => {
+      if (child === el) return false;
+      if (isFootnoteBoilerplateElement(child)) return false;
+      const childTag = child.tagName.toLowerCase();
+      if (childTag === 'ul' || childTag === 'ol') return false;
+      const nestedList = child.closest('ul, ol');
+      if (nestedList && el.contains(nestedList) && nestedList !== el.parentElement) {
+        return false;
+      }
+      return true;
+    });
+
+    if (nonListChildBlocks.length > 0) {
+      return false;
+    }
+    return true;
+  }
+
   // If it contains child blocks, check if those child blocks are actual content blocks (not just boilerplate)
   const childBlocks = Array.from(el.querySelectorAll(BLOCK_SELECTOR)).filter(
     (child) => child !== el && !isFootnoteBoilerplateElement(child)
@@ -577,7 +597,7 @@ function replaceBlockTextPreservingLinks(
   const originalText = getBlockContent(el);
   if (oldSpans.length === 1 && blockFootnotes.length === 0) {
     const span = oldSpans[0];
-    if (span.type === 'a') {
+    if (span.type === 'a' && originalText === span.text) {
       const originalHref = span.href || el.querySelector('a')?.getAttribute('href') || '';
       const aElem = document.createElement('a');
       aElem.textContent = newText;
@@ -669,10 +689,11 @@ function replaceBlockTextPreservingLinks(
     });
   } else if (oldSpans && oldSpans.length > 0) {
     // When the Word document provides plain text without explicit hyperlinks/spans,
-    // check if the English structure had hyperlinks (e.g. Table of Contents list items like <li><a href="#a1">Purpose</a></li>).
-    // In that case, wrap the entire French text with the corresponding link skeleton.
+    // only wrap the entire French text in the link if the link IS the entire
+    // English block content (e.g. Table of Contents list items like <li><a href="#a1">Purpose</a></li>)
+    // — not when a link was just a partial sentence or fragment.
     const enLinks = oldSpans.filter((s) => s.type === 'a');
-    if (enLinks.length === 1) {
+    if (enLinks.length === 1 && oldSpans.length === 1 && originalText === enLinks[0].text) {
       const enLink = enLinks[0];
       const enHref = enLink.href || '';
       let frHref = enHref;
@@ -733,35 +754,118 @@ function replaceBlockTextPreservingLinks(
   // Rebuild text with footnote placeholders if footnotes exist
   let rebuilt = newText;
   if (blockFootnotes.length > 0) {
-    blockFootnotes.forEach((fn, fIdx) => {
-      const fnNum = fn.fnNum;
-      const fnEscaped = escapeRegExp(fnNum);
-      const pureNum = fnNum.replace(/^fn[-_]?/i, '');
-      const pureNumEscaped = escapeRegExp(pureNum);
-      const posEscaped = escapeRegExp(String(fIdx + 1));
+    const toSuperscript = (str) =>
+      String(str)
+        .replace(/0/g, '⁰')
+        .replace(/1/g, '¹')
+        .replace(/2/g, '²')
+        .replace(/3/g, '³')
+        .replace(/4/g, '⁴')
+        .replace(/5/g, '⁵')
+        .replace(/6/g, '⁶')
+        .replace(/7/g, '⁷')
+        .replace(/8/g, '⁸')
+        .replace(/9/g, '⁹');
 
-      const numPatterns = [fnEscaped];
-      if (pureNum && pureNum !== fnNum && !numPatterns.includes(pureNumEscaped)) {
-        numPatterns.push(pureNumEscaped);
+    // 1. Check if multiple footnotes appear together as a cluster in the text
+    // E.g. "¹ ²", "¹²", "¹,²", "¹, ²", "1 2", "1, 2", "1,2", "[1, 2]", "[1][2]", "(1, 2)", "(1)(2)", "Notes 1 et 2", "Notes 1, 2"
+    if (blockFootnotes.length > 1) {
+      const allNums = blockFootnotes.map((fn, idx) => {
+        const pure = fn.fnNum.replace(/^fn[-_]?/i, '');
+        return {
+          fnNum: fn.fnNum,
+          pure: pure || String(idx + 1),
+          super: toSuperscript(pure || String(idx + 1)),
+          idx,
+        };
+      });
+
+      // Check for clustered superscript sequence e.g. "¹ ²" or "¹²" or "¹, ²"
+      const superClusterRegexStr = allNums
+        .map((n) => escapeRegExp(n.super))
+        .join('[\\s,;\\-–—]*');
+      const superClusterRegex = new RegExp(`[\\s\u00A0]*(?:${superClusterRegexStr})`, 'g');
+      if (superClusterRegex.test(rebuilt)) {
+        const clusterRepl = allNums.map((n) => `___GC_FN_${n.idx}___`).join('');
+        rebuilt = rebuilt.replace(superClusterRegex, clusterRepl);
+      } else {
+        // Check for clustered bracket/parenthesis/note e.g. "[1, 2]", "(1, 2)", "{1, 2}", "[1][2]"
+        const numClusterRegexStr = allNums
+          .map((n) => `(?:fn[-_]?|#fn[-_]?|Note(?:\\s+de\\s+bas\\s+de\\s+page)?\\s*)?(?:${escapeRegExp(n.pure)}|${escapeRegExp(n.fnNum)})`)
+          .join('[\\s,;\\-–—/et]+');
+        const bracketClusterRegex = new RegExp(
+          `[\\s\u00A0]*(?:\\[\\s*${numClusterRegexStr}\\s*\\]|\\(\\s*${numClusterRegexStr}\\s*\\)|\\{\\s*${numClusterRegexStr}\\s*\\}|\\b(?:Notes?(?:\\s+de\\s+bas\\s+de\\s+page)?|Footnotes?)\\s+${numClusterRegexStr}\\b)`,
+          'i'
+        );
+        if (bracketClusterRegex.test(rebuilt)) {
+          const clusterRepl = allNums.map((n) => `___GC_FN_${n.idx}___`).join('');
+          rebuilt = rebuilt.replace(bracketClusterRegex, clusterRepl);
+        } else {
+          // Check for trailing clustered numbers e.g. "Bundibugyo1 2", "Bundibugyo 1 2", "Bundibugyo1, 2"
+          const trailingClusterRegexStr = allNums
+            .map((n) => `(?:${escapeRegExp(n.pure)}|${escapeRegExp(n.fnNum)})`)
+            .join('[\\s,;\\-–—]+');
+          const trailingClusterRegex = new RegExp(
+            `(?<=[a-zA-ZÀ-ÖØ-öø-ÿ.,;:!?'"»)])[\\s\u00A0]*(?:${trailingClusterRegexStr})(?=[\\s.,;:!?'"»)]|$)`,
+            'i'
+          );
+          if (trailingClusterRegex.test(rebuilt)) {
+            const clusterRepl = allNums.map((n) => `___GC_FN_${n.idx}___`).join('');
+            rebuilt = rebuilt.replace(trailingClusterRegex, clusterRepl);
+          }
+        }
       }
-      if (posEscaped && !numPatterns.includes(posEscaped)) {
-        numPatterns.push(posEscaped);
+    }
+
+    // 2. For any remaining footnotes not yet matched in rebuilt, match them individually
+    blockFootnotes.forEach((fn, fIdx) => {
+      if (rebuilt.includes(`___GC_FN_${fIdx}___`)) return;
+
+      const fnNum = fn.fnNum;
+      const pureNum = fnNum.replace(/^fn[-_]?/i, '');
+      const posNum = String(fIdx + 1);
+      const superNum = toSuperscript(pureNum || posNum);
+
+      const numPatterns = [escapeRegExp(fnNum)];
+      if (pureNum && pureNum !== fnNum && !numPatterns.includes(escapeRegExp(pureNum))) {
+        numPatterns.push(escapeRegExp(pureNum));
+      }
+      if (posNum && !numPatterns.includes(escapeRegExp(posNum))) {
+        numPatterns.push(escapeRegExp(posNum));
       }
       const patternOr = numPatterns.join('|');
+      const superEscaped = escapeRegExp(superNum);
 
       const fnRegex = new RegExp(
-        `(?:\\s*\\{\\s*(?:fn[-_]?|#fn[-_]?|Note\\s*(?:de\\s+bas\\s+de\\s+page)?\\s*)?(?:${patternOr})\\s*\\}|` +
-        `\\s*\\[\\s*(?:fn[-_]?|#fn[-_]?|Note\\s*(?:de\\s+bas\\s+de\\s+page)?\\s*)?(?:${patternOr})\\s*\\]|` +
-        `\\s*\\(\\s*(?:fn[-_]?|#fn[-_]?|Note\\s*(?:de\\s+bas\\s+de\\s+page)?\\s*)?(?:${patternOr})\\s*\\)|` +
-        `\\s*\\b(?:Note(?:\\s+de\\s+bas\\s+de\\s+page)?|Footnote)\\s*(?:${patternOr})\\b(?:\\s*[.:])?)`,
+        `[\\s\u00A0]*(?:` +
+        // Unicode superscripts: ¹, ², etc.
+        `${superEscaped}+|` +
+        // Brackets / braces / parentheses: [1], (1), {1}, [fn1], (Note 1)
+        `\\{\\s*(?:fn[-_]?|#fn[-_]?|Note\\s*(?:de\\s+bas\\s+de\\s+page)?\\s*)?(?:${patternOr})\\s*\\}|` +
+        `\\[\\s*(?:fn[-_]?|#fn[-_]?|Note\\s*(?:de\\s+bas\\s+de\\s+page)?\\s*)?(?:${patternOr})\\s*\\]|` +
+        `\\(\\s*(?:fn[-_]?|#fn[-_]?|Note\\s*(?:de\\s+bas\\s+de\\s+page)?\\s*)?(?:${patternOr})\\s*\\)|` +
+        // Explicit label: Note 1, Footnote 1, Note de bas de page 1
+        `\\b(?:Note(?:\\s+de\\s+bas\\s+de\\s+page)?|Footnote)\\s*(?:${patternOr})\\b(?:\\s*[.:])?|` +
+        // Number following a previous footnote placeholder: ___GC_FN_0___ 2 or ___GC_FN_0___, 2
+        `(?<=___GC_FN_\\d+___)[\\s\u00A0,;\\-–—]*(?:${patternOr})(?=[\\s.,;:!?'"»)]|$)|` +
+        // Number directly attached to preceding word or punctuation: "Bundibugyo1", "virus1", "mot1"
+        `(?<=[a-zA-ZÀ-ÖØ-öø-ÿ.,;:!?'"»)])(?:${patternOr})(?=[\\s.,;:!?'"»)]|$)|` +
+        // Number at the very end of the text: "Bundibugyo 1"
+        `[\\s\u00A0]+(?:${patternOr})$` +
+        `)`,
         'i'
       );
+
       if (fnRegex.test(rebuilt)) {
         rebuilt = rebuilt.replace(fnRegex, `___GC_FN_${fIdx}___`);
       } else {
         rebuilt = rebuilt + `___GC_FN_${fIdx}___`;
       }
     });
+
+    // 3. Clean any leftover stray superscript characters or redundant digits immediately adjacent to footnote placeholders
+    rebuilt = rebuilt.replace(/(?<=[a-zA-ZÀ-ÖØ-öø-ÿ])[ \t\u00A0]*[¹²³⁴⁵⁶⁷⁸⁹⁰]+(?=[ \t\u00A0]*___GC_FN_)/g, '');
+    rebuilt = rebuilt.replace(/(?<=[a-zA-ZÀ-ÖØ-öø-ÿ])[ \t\u00A0]*\d+(?=[ \t\u00A0]*___GC_FN_)/g, '');
   }
 
   // If no active spans and no footnotes to apply, simply set textContent
@@ -844,6 +948,9 @@ function isFootnoteHeadingBlock(block) {
   if (block.el && (block.el.id === 'fn' || block.el.closest('#fn') || (block.el.closest('.wb-fnote, [role="note"]') && isHeadingTag(block.tag)))) {
     return true;
   }
+  // Only a genuine heading (or definition term) counts — this rules out
+  // table-of-contents bullets/links that merely say "Footnotes".
+  if (!isHeadingTag(block.tag) && block.tag !== 'dt') return false;
   return /^\s*(?:Footnotes?|Notes?\s+de\s+bas\s+de\s+page)\s*[:：]?\s*$/i.test((block.text || '').trim());
 }
 
@@ -862,8 +969,14 @@ function isFootnoteContentBlock(block, allBlocks = []) {
     const idx = allBlocks.indexOf(block);
     if (idx > 0) {
       for (let k = idx - 1; k >= 0; k--) {
-        if (isFootnoteHeadingBlock(allBlocks[k])) {
+        const prev = allBlocks[k];
+        if (isFootnoteHeadingBlock(prev)) {
           return true;
+        }
+        // If we hit a different real heading before finding a footnote heading,
+        // we've walked back into another section — stop.
+        if (isHeadingTag(prev.tag)) {
+          return false;
         }
       }
     }
@@ -1240,6 +1353,74 @@ a:visited {
 }
 a:hover, a:focus {
   color: var(--gc-link-hover) !important;
+}
+
+/* Lists & WET List Styles */
+ul {
+  list-style-type: disc !important;
+  padding-left: 28px !important;
+  margin-top: 0 !important;
+  margin-bottom: 12px !important;
+}
+ul ul {
+  list-style-type: circle !important;
+  margin-top: 4px !important;
+  margin-bottom: 6px !important;
+}
+ul ul ul {
+  list-style-type: square !important;
+}
+
+ol {
+  list-style-type: decimal !important;
+  padding-left: 28px !important;
+  margin-top: 0 !important;
+  margin-bottom: 12px !important;
+}
+ol ol {
+  list-style-type: lower-alpha !important;
+  margin-top: 4px !important;
+  margin-bottom: 6px !important;
+}
+ol ol ol {
+  list-style-type: lower-roman !important;
+}
+
+li {
+  margin-bottom: 6px !important;
+}
+li > p {
+  margin-top: 0 !important;
+  margin-bottom: 6px !important;
+}
+li > p:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* WET / GCWeb Ordered List Type Classes */
+ol.lst-lwr-alph, .lst-lwr-alph, ol[type="a"],
+ol.lst-lwr-alph > li, .lst-lwr-alph > li {
+  list-style-type: lower-alpha !important;
+}
+ol.lst-upr-alph, .lst-upr-alph, ol[type="A"],
+ol.lst-upr-alph > li, .lst-upr-alph > li {
+  list-style-type: upper-alpha !important;
+}
+ol.lst-lwr-rmn, .lst-lwr-rmn, ol[type="i"],
+ol.lst-lwr-rmn > li, .lst-lwr-rmn > li {
+  list-style-type: lower-roman !important;
+}
+ol.lst-upr-rmn, .lst-upr-rmn, ol[type="I"],
+ol.lst-upr-rmn > li, .lst-upr-rmn > li {
+  list-style-type: upper-roman !important;
+}
+ol.lst-num, .lst-num, ol[type="1"],
+ol.lst-num > li, .lst-num > li {
+  list-style-type: decimal !important;
+}
+.lst-spcd > li, ul.lst-spcd > li, ol.lst-spcd > li {
+  margin-top: 12px !important;
+  margin-bottom: 12px !important;
 }
 
 /* Unstyled and Inline Lists */

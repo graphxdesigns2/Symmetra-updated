@@ -150,6 +150,32 @@ body {
   color: var(--text);
 }
 
+/* WET / GCWeb Ordered List Type Classes */
+ol.lst-lwr-alph, .lst-lwr-alph, ol[type="a"],
+ol.lst-lwr-alph > li, .lst-lwr-alph > li {
+  list-style-type: lower-alpha !important;
+}
+ol.lst-upr-alph, .lst-upr-alph, ol[type="A"],
+ol.lst-upr-alph > li, .lst-upr-alph > li {
+  list-style-type: upper-alpha !important;
+}
+ol.lst-lwr-rmn, .lst-lwr-rmn, ol[type="i"],
+ol.lst-lwr-rmn > li, .lst-lwr-rmn > li {
+  list-style-type: lower-roman !important;
+}
+ol.lst-upr-rmn, .lst-upr-rmn, ol[type="I"],
+ol.lst-upr-rmn > li, .lst-upr-rmn > li {
+  list-style-type: upper-roman !important;
+}
+ol.lst-num, .lst-num, ol[type="1"],
+ol.lst-num > li, .lst-num > li {
+  list-style-type: decimal !important;
+}
+.lst-spcd > li, ul.lst-spcd > li, ol.lst-spcd > li {
+  margin-top: 12px !important;
+  margin-bottom: 12px !important;
+}
+
 .skip-link {
   position: absolute;
   top: -40px;
