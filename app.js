@@ -155,12 +155,12 @@ function isFootnoteElement(el) {
   if (!el || !el.tagName) return false;
   const tag = el.tagName.toLowerCase();
   if (tag === 'sup') {
-    return !!el.querySelector('a.fn-lnk, a[href*="#fn"]');
+    return !!el.querySelector('a.fn-lnk, a[href*="#fn"], a[href*="#_ftn"]') || /^\s*\d{1,3}\s*$/.test(el.textContent);
   }
   if (tag === 'a') {
     if (el.classList.contains('fn-lnk') || el.classList.contains('fn-rtn')) return true;
     const href = el.getAttribute('href') || '';
-    if (href.startsWith('#fn') || href.includes('-rf')) return true;
+    if (href.startsWith('#fn') || href.includes('-rf') || href.startsWith('#_ftn')) return true;
     if (el.closest('sup')) return true;
   }
   return false;
@@ -169,21 +169,36 @@ function isFootnoteElement(el) {
 function extractBlockFootnotes(el) {
   const footnotes = [];
   const fnLinks = Array.from(
-    el.querySelectorAll('sup a.fn-lnk, a.fn-lnk, sup > a[href*="#fn"]:not([href*="-rf"]), a[href*="#fn"]:not([href*="-rf"])')
+    el.querySelectorAll(
+      'sup a.fn-lnk, a.fn-lnk, sup > a[href*="#fn"]:not([href*="-rf"]), a[href*="#fn"]:not([href*="-rf"]), sup > a[href*="#_ftn"], a[href*="#_ftn"]'
+    )
   ).filter((a) => !a.classList.contains('fn-rtn') && !a.closest('.fn-rtn') && !(a.getAttribute('href') || '').includes('-rf'));
 
   fnLinks.forEach((a) => {
     const href = a.getAttribute('href') || '';
-    const numMatch = href.match(/#fn([a-zA-Z0-9_-]+)/i) || a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/);
+    const numMatch = href.match(/#(?:fn|_ftn)?([a-zA-Z0-9_-]+)/i) || a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/);
     const fnNum = numMatch ? numMatch[1] : '1';
     const sup = a.closest('sup');
     const supId = sup?.getAttribute('id') || a.getAttribute('id') || '';
-    const cleanHref = href || `#fn${fnNum}`;
+    const cleanHref = href.startsWith('#_ftn') ? `#fn${fnNum}` : (href || `#fn${fnNum}`);
 
     footnotes.push({
       fnNum,
       href: cleanHref,
       id: supId,
+    });
+  });
+
+  // Also check for bare <sup> elements with digits (e.g. <sup>1</sup>) that don't have an <a> tag
+  const bareSups = Array.from(el.querySelectorAll('sup')).filter((sup) => {
+    return !sup.querySelector('a') && /^\s*\d{1,3}\s*$/.test(sup.textContent);
+  });
+  bareSups.forEach((sup) => {
+    const fnNum = sup.textContent.trim();
+    footnotes.push({
+      fnNum,
+      href: `#fn${fnNum}`,
+      id: sup.getAttribute('id') || '',
     });
   });
 
@@ -206,43 +221,98 @@ function createFrenchFootnoteNode(fn) {
 }
 
 function convertFootnotesToFrenchInHtml(html) {
-  if (!html) return html;
-  return html
-    // 1. In-text footnote links with <sup> wrapper
-    .replace(
-      /<sup(\s+id="[^"]*")?>\s*<a\s+class="fn-lnk"\s+href="#fn([a-zA-Z0-9_-]+)"([^>]*)>\s*<span\s+class="wb-inv">\s*Footnote\s*<\/span>\s*([a-zA-Z0-9_-]+)\s*<\/a>\s*<\/sup>/gi,
-      (match, supId, hrefNum, extraAttrs, textNum) => {
-        return `<sup${supId || ''}><a class="fn-lnk" href="#fn${hrefNum}"${extraAttrs || ''}><span class="wb-inv">Note de bas de page </span>${textNum}</a></sup>`;
+  if (!html || typeof html !== 'string') return html || '';
+  const trimmed = html.trim();
+  if (!trimmed) return '';
+
+  const isFullDoc = /^<!doctype/i.test(trimmed) || /<html[\s>]/i.test(trimmed);
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(
+    isFullDoc ? trimmed : `<html><head></head><body>${trimmed}</body></html>`,
+    'text/html'
+  );
+
+  const root = doc.body;
+  if (!root) return html;
+
+  // 1. Process Footnotes headings (e.g. <h2 id="fn">Footnotes</h2> or <h2>Footnotes</h2>)
+  root.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((h) => {
+    const text = h.textContent.trim();
+    if (/^Footnotes?$/i.test(text)) {
+      h.textContent = 'Notes de bas de page';
+      if (!h.id && h.closest('.wb-fnote, [role="note"]')) {
+        h.id = 'fn';
       }
-    )
-    // 2. In-text footnote link without <sup> wrapper
-    .replace(
-      /<a\s+class="fn-lnk"\s+href="#fn([a-zA-Z0-9_-]+)"([^>]*)>\s*<span\s+class="wb-inv">\s*Footnote\s*<\/span>\s*([a-zA-Z0-9_-]+)\s*<\/a>/gi,
-      (match, hrefNum, extraAttrs, textNum) => {
-        return `<sup><a class="fn-lnk" href="#fn${hrefNum}"${extraAttrs || ''}><span class="wb-inv">Note de bas de page </span>${textNum}</a></sup>`;
-      }
-    )
-    // 3. Return to footnote referrer links (handles full Canada.ca WET return link)
-    .replace(
-      /<a(\s+[^>]*?)href="#fn([a-zA-Z0-9_-]+)-rf"([^>]*)>([\s\S]*?)<\/a>/gi,
-      (match, beforeHref, hrefNum, afterHref, innerText) => {
-        return `<a${beforeHref}href="#fn${hrefNum}-rf"${afterHref}><span class="wb-inv">Retour à la référence de la note de bas de page </span>${hrefNum}</a>`;
-      }
-    )
-    // 4. Definition terms in footnotes section: <dt>Footnote 1</dt> -> <dt>Note de bas de page 1</dt>
-    .replace(
-      /<dt(\s+[^>]*)?>\s*(?:Footnote|Note\s+de\s+bas\s+de\s+page)\s*([a-zA-Z0-9_-]+)\s*<\/dt>/gi,
-      '<dt$1>Note de bas de page $2</dt>'
-    )
-    // 5. Footnotes heading: <h2 id="fn">Footnotes</h2> -> <h2 id="fn">Notes de bas de page</h2>
-    .replace(
-      /<h([1-6])(\s+[^>]*?id="fn"[^>]*)>\s*(?:Footnotes?|Notes?\s+de\s+bas\s+de\s+page)\s*<\/h\1>/gi,
-      '<h$1$2>Notes de bas de page</h$1>'
-    )
-    .replace(
-      /<h([1-6])(\s+[^>]*)?>\s*Footnotes\s*<\/h\1>/gi,
-      '<h$1$2>Notes de bas de page</h$1>'
-    );
+    }
+  });
+
+  // 2. Process Definition Terms in footnote lists (<dt>Footnote 1</dt> or <dt><span class="wb-inv">Footnote </span>1</dt>)
+  root.querySelectorAll('dt').forEach((dt) => {
+    const text = dt.textContent.trim();
+    const dtMatch = text.match(/^(?:Footnote|Note\s+de\s+bas\s+de\s+page)\s*([a-zA-Z0-9_-]+)/i);
+    if (dtMatch) {
+      const fnNum = dtMatch[1];
+      dt.textContent = `Note de bas de page ${fnNum}`;
+    }
+  });
+
+  // 3. Process Return to footnote links (<a class="fn-rtn" href="#fn1-rf">...)
+  root.querySelectorAll('a[href*="-rf"], a.fn-rtn').forEach((a) => {
+    const href = a.getAttribute('href') || '';
+    const rfMatch = href.match(/#fn([a-zA-Z0-9_-]+)-rf/i);
+    const fnNum = rfMatch
+      ? rfMatch[1]
+      : (a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/) ? a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/)[1] : '1');
+
+    // Check if it already has the exact French return label
+    const invSpan = a.querySelector('.wb-inv');
+    if (invSpan && /Retour/i.test(invSpan.textContent)) return;
+
+    a.textContent = '';
+    a.classList.add('fn-rtn');
+    if (rfMatch) {
+      a.setAttribute('href', `#fn${fnNum}-rf`);
+    }
+    const span = doc.createElement('span');
+    span.className = 'wb-inv';
+    span.textContent = 'Retour à la référence de la note de bas de page ';
+    a.appendChild(span);
+    a.appendChild(doc.createTextNode(fnNum));
+  });
+
+  // 4. Process in-text footnote links (sup > a.fn-lnk, a.fn-lnk, etc.)
+  root.querySelectorAll('sup a.fn-lnk, a.fn-lnk, sup > a[href*="#fn"]:not([href*="-rf"]), a[href*="#fn"]:not([href*="-rf"])').forEach((a) => {
+    const href = a.getAttribute('href') || '';
+    const fnMatch = href.match(/#fn([a-zA-Z0-9_-]+)/i);
+    const fnNum = fnMatch
+      ? fnMatch[1]
+      : (a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/) ? a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/)[1] : '1');
+
+    // Ensure link has correct classes and href
+    a.className = 'fn-lnk';
+    a.setAttribute('href', `#fn${fnNum}`);
+
+    // Ensure inside a <sup> wrapper
+    let sup = a.closest('sup');
+    if (!sup) {
+      sup = doc.createElement('sup');
+      a.parentNode.insertBefore(sup, a);
+      sup.appendChild(a);
+    }
+
+    // Standardize inner content to: <span class="wb-inv">Note de bas de page </span>N
+    a.textContent = '';
+    const span = doc.createElement('span');
+    span.className = 'wb-inv';
+    span.textContent = 'Note de bas de page ';
+    a.appendChild(span);
+    a.appendChild(doc.createTextNode(fnNum));
+  });
+
+  if (isFullDoc) {
+    return doc.documentElement ? doc.documentElement.outerHTML : root.innerHTML;
+  }
+  return root.innerHTML;
 }
 
 function cleanThTags(root) {
@@ -984,30 +1054,171 @@ function isFootnoteContentBlock(block, allBlocks = []) {
   return false;
 }
 
+function isHeadingLikeBlock(block) {
+  if (!block) return false;
+  if (isHeadingTag(block.tag)) return true;
+  if (block.el) {
+    const strongEl = block.el.querySelector('strong, b, h1, h2, h3, h4, h5, h6');
+    if (strongEl) {
+      const strongText = (strongEl.textContent || '').trim();
+      const allText = (block.text || '').trim();
+      if (strongText && Math.abs(strongText.length - allText.length) <= 8) {
+        return true;
+      }
+    }
+  }
+  const txt = (block.text || '').trim();
+  if (/^(?:Annexe|Appendix|Tableau|Table|Figure|Section|Partie|Part|Chapitre|Chapter|Étape|Step)\b/i.test(txt)) {
+    return true;
+  }
+  return false;
+}
+
+function extractSectionIdentifier(text) {
+  if (!text) return null;
+  const t = text.trim();
+  const m = t.match(/^(?:Annexe|Appendix|Tableau|Table|Figure|Section|Partie|Part|Chapitre|Chapter|Étape|Step)\s+([a-zA-Z0-9_-]+)/i);
+  if (m) {
+    const rawType = m[0].split(/\s+/)[0].toLowerCase();
+    let normType = 'section';
+    if (/annex|appendix/i.test(rawType)) normType = 'appendix';
+    else if (/table/i.test(rawType)) normType = 'table';
+    else if (/figure/i.test(rawType)) normType = 'figure';
+    else if (/part/i.test(rawType)) normType = 'part';
+    else if (/chap/i.test(rawType)) normType = 'chapter';
+    else if (/step|tape/i.test(rawType)) normType = 'step';
+    return `${normType}:${m[1].toLowerCase()}`;
+  }
+  const numPrefixMatch = t.match(/^(\d+(?:\.\d+)*|[a-zA-Z]\))\s+/);
+  if (numPrefixMatch) {
+    return `num:${numPrefixMatch[1].toLowerCase()}`;
+  }
+  return null;
+}
+
+function extractBlockFootnoteNumbers(block) {
+  if (!block) return [];
+  const nums = [];
+  if (block.el) {
+    const fns = extractBlockFootnotes(block.el);
+    fns.forEach((f) => {
+      const pure = f.fnNum.replace(/^fn[-_]?/i, '');
+      if (pure && !nums.includes(pure)) nums.push(pure);
+    });
+  }
+  const txt = block.text || '';
+  const bracketMatches = Array.from(txt.matchAll(/(?:\[|\{|\()(?:\s*Note\s*)?(\d{1,3})(?:\s*\]|\}|\))/gi));
+  for (const m of bracketMatches) {
+    if (!nums.includes(m[1])) nums.push(m[1]);
+  }
+  const superMatches = Array.from(txt.matchAll(/([¹²³⁴⁵⁶⁷⁸⁹⁰]+)/g));
+  for (const m of superMatches) {
+    const map = { '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁰': '0' };
+    const converted = m[1].split('').map((c) => map[c] || c).join('');
+    if (converted && !nums.includes(converted)) nums.push(converted);
+  }
+  const attachedMatches = Array.from(txt.matchAll(/(?:[a-zA-ZÀ-ÖØ-öø-ÿ]+)(\d{1,2})(?=[\s.,;:!?'"»)\]}]|$)/g));
+  for (const m of attachedMatches) {
+    if (!nums.includes(m[1])) nums.push(m[1]);
+  }
+  return nums;
+}
+
+function extractDistinctiveTokens(text) {
+  if (!text) return new Set();
+  const words = text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 4 || /\d/.test(w));
+  return new Set(words);
+}
+
 function getBlockMatchScore(enTag, frTag, enBlock, frBlock, enBlocks = [], frBlocks = []) {
   if (enBlock && frBlock) {
     const enIsFnHeader = isFootnoteHeadingBlock(enBlock);
     const frIsFnHeader = isFootnoteHeadingBlock(frBlock);
 
     // Both are footnote headers (e.g. Footnotes / Notes de bas de page) -> lock together
-    if (enIsFnHeader && frIsFnHeader) return 10;
+    if (enIsFnHeader && frIsFnHeader) return 15;
     // One is footnote header, the other is NOT -> heavy penalty
-    if (enIsFnHeader !== frIsFnHeader) return -8;
+    if (enIsFnHeader !== frIsFnHeader) return -12;
 
     const enIsFnContent = isFootnoteContentBlock(enBlock, enBlocks);
     const frIsFnContent = isFootnoteContentBlock(frBlock, frBlocks);
 
     // Both are footnote content items -> lock together
-    if (enIsFnContent && frIsFnContent) return 8;
+    if (enIsFnContent && frIsFnContent) return 10;
     // One is footnote content, the other is regular body text -> penalty to prevent cross-contamination
-    if (enIsFnContent !== frIsFnContent) return -6;
+    if (enIsFnContent !== frIsFnContent) return -8;
+
+    // Structural section identifier match (e.g. "Appendix 2" vs "Annexe 2", "Table 1" vs "Tableau 1")
+    const enSecId = extractSectionIdentifier(enBlock.text);
+    const frSecId = extractSectionIdentifier(frBlock.text);
+    if (enSecId && frSecId) {
+      if (enSecId === frSecId) {
+        return 16.0; // Deterministic anchor lock
+      } else {
+        return -8.0; // Different section identifiers (e.g. Annexe 1 vs Annexe 2)
+      }
+    }
+
+    // Heading vs Heading / Heading-like matching
+    const enIsHeading = isHeadingLikeBlock(enBlock);
+    const frIsHeading = isHeadingLikeBlock(frBlock);
+    if (enIsHeading && frIsHeading) {
+      // Both act as section headings
+      let headingScore = 6.0;
+      if (enTag === frTag) headingScore += 2.0;
+      return headingScore;
+    }
+
+    // Heavy penalty: a heading block should NOT match a long body text / list item
+    const frWordCount = (frBlock.text || '').split(/\s+/).filter(Boolean).length;
+    const enWordCount = (enBlock.text || '').split(/\s+/).filter(Boolean).length;
+    if (isHeadingTag(enTag) && !frIsHeading && frWordCount > 15) {
+      return -5.0;
+    }
+    if (isHeadingTag(frTag) && !enIsHeading && enWordCount > 15) {
+      return -5.0;
+    }
+
+    // Footnote signature bonus for body / heading blocks:
+    // If both blocks have footnote markers and share numbers (e.g. both have [1, 2] or 3), give strong anchor bonus
+    const enFnNums = extractBlockFootnoteNumbers(enBlock);
+    const frFnNums = extractBlockFootnoteNumbers(frBlock);
+    if (enFnNums.length > 0 && frFnNums.length > 0) {
+      const sharedFns = enFnNums.filter((n) => frFnNums.includes(n));
+      if (sharedFns.length > 0) {
+        return 5.0 + sharedFns.length * 3.0;
+      }
+    }
+
+    // List bullet to list bullet compatibility
+    const enIsBullet = enTag === 'li';
+    const frIsBullet = frTag === 'li' || /^\s*[•\-*–—]\s+/.test(frBlock.text || '');
+    if (enIsBullet && frIsBullet) {
+      let bulletScore = 3.0;
+      // Token overlap check for list items
+      const enTokens = extractDistinctiveTokens(enBlock.text);
+      const frTokens = extractDistinctiveTokens(frBlock.text);
+      let sharedCount = 0;
+      enTokens.forEach((t) => {
+        if (frTokens.has(t)) sharedCount++;
+      });
+      if (sharedCount > 0) {
+        bulletScore += Math.min(3.0, sharedCount * 0.8);
+      }
+      return bulletScore;
+    }
   }
 
   // Exact tag match (e.g. p === p, li === li, h2 === h2)
   if (enTag === frTag) return 2.5;
 
   // Heading to heading (e.g. h2 to h3 or h1 to h2)
-  if (isHeadingTag(enTag) && isHeadingTag(frTag)) return 1.8;
+  if (isHeadingTag(enTag) && isHeadingTag(frTag)) return 2.0;
 
   // Cross-tag matches for unformatted Word documents:
   // When Word document has plain paragraphs (<p>) where English has list items (<li>), table cells (<td>/<th>),
@@ -1016,15 +1227,12 @@ function getBlockMatchScore(enTag, frTag, enBlock, frBlock, enBlocks = [], frBlo
   const isFrContentTag = ['li', 'p', 'td', 'th', 'dd', 'dt', 'figcaption', 'blockquote', 'summary'].includes(frTag);
 
   if (isEnContentTag && isFrContentTag) {
-    // List item to paragraph or paragraph to list item
     if ((enTag === 'li' && frTag === 'p') || (enTag === 'p' && frTag === 'li')) {
       return 1.2;
     }
-    // Heading in Word doc matching a content paragraph/list in English, or vice versa
     if (isHeadingTag(enTag) || isHeadingTag(frTag)) {
       return 0.5;
     }
-    // Generic content block cross-match
     return 1.0;
   }
 
@@ -1943,9 +2151,9 @@ summary:hover {
 }
 
 .gc-li-content {
-  display: inline-block;
+  display: block;
   border-radius: 2px;
-  vertical-align: baseline;
+  margin-bottom: 4px;
 }
 
 .gc-swap-editable:hover {
@@ -2374,7 +2582,7 @@ function expandSources() {
 }
 
 // Alignment and Dual Pane Rendering
-function computeAlignment() {
+function computeAlignment(targetBlockIndex = null) {
   const enTags = state.enBlocks.map((b) => b.tag);
   const frTags = state.frBlocks.map((b) => b.tag);
   const rows = alignByTag(enTags, frTags, state.enBlocks, state.frBlocks);
@@ -2384,8 +2592,13 @@ function computeAlignment() {
   state.alignRows = rows;
   state.alignPairs = pairs;
   state.issueGroups = issues;
-  state.activePreviewBlock = 0;
-  state.lastKnownEnIndex = 0;
+
+  const targetIdx = (targetBlockIndex !== null && targetBlockIndex !== undefined)
+    ? Math.max(0, Math.min(state.enBlocks.length - 1, targetBlockIndex))
+    : (state.activePreviewBlock || 0);
+
+  state.activePreviewBlock = targetIdx;
+  state.lastKnownEnIndex = targetIdx;
   state.syncOffset = 0;
   state.frCustomHtml = null;
 
@@ -2401,8 +2614,8 @@ function computeAlignment() {
 
   setTimeout(() => {
     applyActiveHighlight();
-    alignPreviewBlocks(0);
-    updateActiveBlockHud(0);
+    alignPreviewBlocks(targetIdx);
+    updateActiveBlockHud(targetIdx);
   }, 120);
 }
 
@@ -3565,6 +3778,107 @@ function findFrenchTypographyIssues(text) {
   return issues;
 }
 
+function getTypoSnippetWindow(text, max = 150) {
+  if (!text) return '';
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+
+  const match = clean.match(/[:;?!«»$%]|\d\s*(?:km|kg|mg|m|cm|mm|h|min|s|ans|jours|mois|pages|p\.|art\.|no|n°)\b/i);
+  if (!match || match.index === undefined) {
+    return clean.slice(0, max) + '…';
+  }
+
+  const matchIdx = match.index;
+  const half = Math.floor(max / 2);
+  let start = Math.max(0, matchIdx - half);
+  let end = Math.min(clean.length, start + max);
+
+  if (end - start < max) {
+    start = Math.max(0, end - max);
+  }
+
+  let res = clean.slice(start, end);
+  if (start > 0) res = '…' + res;
+  if (end < clean.length) res = res + '…';
+  return res;
+}
+
+function highlightTypoOriginal(text) {
+  if (!text) return '';
+  let escaped = escapeHtml(text);
+
+  // 1. Punctuation missing non-breaking space (e.g. " :", ":", " ;", ";", " !", " ?", etc.)
+  escaped = escaped.replace(/([^\s\u00A0&])([ \t]*)([:;?!])/g, (match, p1, p2, p3) => {
+    return `${p1}<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-500/40 inline-flex items-center" title="Missing non-breaking space (&nbsp;)">${p2 || ''}${p3}</span>`;
+  });
+
+  // 2. Guillemets without non-breaking space
+  escaped = escaped.replace(/«([ \t]*)/g, (match, p1) => {
+    if (!p1.includes('\u00A0')) {
+      return `<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-500/40 inline-flex items-center" title="Missing non-breaking space after «">«${p1}</span>`;
+    }
+    return match;
+  });
+  escaped = escaped.replace(/([ \t]*)»/g, (match, p1) => {
+    if (!p1.includes('\u00A0')) {
+      return `<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-500/40 inline-flex items-center" title="Missing non-breaking space before »">${p1}»</span>`;
+    }
+    return match;
+  });
+
+  // 3. Currency symbol (e.g. "10 $" or "10$")
+  escaped = escaped.replace(/(\d)([ \t]*)([$€])/g, (match, p1, p2, p3) => {
+    return `${p1}<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-500/40 inline-flex items-center" title="Missing non-breaking space before currency">${p2 || ''}${p3}</span>`;
+  });
+
+  // 4. Percentage symbol (e.g. "10 %" or "10%")
+  escaped = escaped.replace(/(\d)([ \t]*)(%)/g, (match, p1, p2, p3) => {
+    return `${p1}<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-500/40 inline-flex items-center" title="Missing non-breaking space before %">${p2 || ''}${p3}</span>`;
+  });
+
+  // 5. Units (e.g. "10 km", "5 ans")
+  escaped = escaped.replace(/(\d)([ \t]+)(km|kg|mg|m|cm|mm|h|min|s|ans|jours|mois|pages|p\.|art\.|no|n°)\b/gi, (match, p1, p2, p3) => {
+    return `${p1}<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-500/40 inline-flex items-center" title="Missing non-breaking space before unit">${p2}${p3}</span>`;
+  });
+
+  return escaped;
+}
+
+function highlightTypoFixed(text) {
+  if (!text) return '';
+  let escaped = escapeHtml(text);
+
+  // 1. Punctuation with non-breaking space (\u00A0[:;?!])
+  escaped = escaped.replace(/\u00A0([:;?!])/g, (match, p1) => {
+    return `<span class="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/40 inline-flex items-center gap-1" title="Non-breaking space applied (&nbsp;)"><span class="text-[9px] px-1 py-0.2 bg-emerald-500/30 rounded font-mono text-emerald-800 dark:text-emerald-200">NBSP</span>${p1}</span>`;
+  });
+
+  // 2. Guillemets with non-breaking space
+  escaped = escaped.replace(/«\u00A0/g, () => {
+    return `<span class="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/40 inline-flex items-center gap-1" title="Non-breaking space applied (&nbsp;)">«<span class="text-[9px] px-1 py-0.2 bg-emerald-500/30 rounded font-mono text-emerald-800 dark:text-emerald-200">NBSP</span></span>`;
+  });
+  escaped = escaped.replace(/\u00A0»/g, () => {
+    return `<span class="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/40 inline-flex items-center gap-1" title="Non-breaking space applied (&nbsp;)">»<span class="text-[9px] px-1 py-0.2 bg-emerald-500/30 rounded font-mono text-emerald-800 dark:text-emerald-200">NBSP</span></span>`;
+  });
+
+  // 3. Currency with non-breaking space (\d\u00A0[$€])
+  escaped = escaped.replace(/(\d)\u00A0([$€])/g, (match, p1, p2) => {
+    return `${p1}<span class="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/40 inline-flex items-center gap-1" title="Non-breaking space applied (&nbsp;)"><span class="text-[9px] px-1 py-0.2 bg-emerald-500/30 rounded font-mono text-emerald-800 dark:text-emerald-200">NBSP</span>${p2}</span>`;
+  });
+
+  // 4. Percentage with non-breaking space (\d\u00A0%)
+  escaped = escaped.replace(/(\d)\u00A0%/g, (match, p1) => {
+    return `${p1}<span class="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/40 inline-flex items-center gap-1" title="Non-breaking space applied (&nbsp;)"><span class="text-[9px] px-1 py-0.2 bg-emerald-500/30 rounded font-mono text-emerald-800 dark:text-emerald-200">NBSP</span>%</span>`;
+  });
+
+  // 5. Units with non-breaking space (\d\u00A0unit)
+  escaped = escaped.replace(/(\d)\u00A0(km|kg|mg|m|cm|mm|h|min|s|ans|jours|mois|pages|p\.|art\.|no|n°)\b/gi, (match, p1, p2) => {
+    return `${p1}<span class="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/40 inline-flex items-center gap-1" title="Non-breaking space applied (&nbsp;)"><span class="text-[9px] px-1 py-0.2 bg-emerald-500/30 rounded font-mono text-emerald-800 dark:text-emerald-200">NBSP</span>${p2}</span>`;
+  });
+
+  return escaped;
+}
+
 function computeTypographyAudit() {
   const list = [];
   state.frBlocks.forEach((b, frIdx) => {
@@ -3591,6 +3905,7 @@ function fixFrenchTypographyBlock(frIdx) {
 }
 
 function fixAllFrenchTypography() {
+  const currentActiveBlock = state.activePreviewBlock;
   let count = 0;
   state.frBlocks.forEach((b) => {
     const fixed = applyFrenchTypographyRules(b.text);
@@ -3599,7 +3914,7 @@ function fixAllFrenchTypography() {
       count++;
     }
   });
-  computeAlignment();
+  computeAlignment(currentActiveBlock);
   renderDrawerBody('typography');
   showToast(`Applied French typography & non-breaking spaces across ${count} block(s)!`);
 }
@@ -3693,6 +4008,7 @@ function computeLangEnAudit() {
 }
 
 function tagEnglishTermInBlock(frIdx, term) {
+  const currentActiveBlock = state.activePreviewBlock;
   const block = state.frBlocks[frIdx];
   if (!block) return;
   if (!block.spans) block.spans = [];
@@ -3701,12 +4017,13 @@ function tagEnglishTermInBlock(frIdx, term) {
     lang: 'en',
     text: term,
   });
-  computeAlignment();
+  computeAlignment(currentActiveBlock);
   renderDrawerBody('lang-en');
   showToast(`Wrapped "${term}" with <span lang="en">`);
 }
 
 function tagAllEnglishTerms() {
+  const currentActiveBlock = state.activePreviewBlock;
   const audit = computeLangEnAudit();
   let count = 0;
   audit.forEach(({ frIndex, terms }) => {
@@ -3721,7 +4038,7 @@ function tagAllEnglishTerms() {
       count++;
     });
   });
-  computeAlignment();
+  computeAlignment(currentActiveBlock);
   renderDrawerBody('lang-en');
   showToast(`Wrapped ${count} English term(s) with <span lang="en">!`);
 }
@@ -3839,6 +4156,32 @@ function computeQaDiffAudit() {
     }
   });
 
+  // 4. List format style adaptation notice (e.g. Word 1. / decimal to HTML a. / lower-alpha)
+  state.alignPairs.forEach((pair) => {
+    const enB = state.enBlocks[pair.enIndex];
+    const frB = state.frBlocks[pair.frIndex];
+    if (!enB || !frB) return;
+    if (enB.tag === 'li' && frB.tag === 'li') {
+      const enParentOl = enB.el ? enB.el.closest('ol') : null;
+      if (enParentOl) {
+        const isAlpha = enParentOl.classList.contains('lst-lwr-alph') || enParentOl.classList.contains('lst-upr-alph') || enParentOl.getAttribute('type') === 'a' || enParentOl.getAttribute('type') === 'A';
+        const isRoman = enParentOl.classList.contains('lst-lwr-rmn') || enParentOl.classList.contains('lst-upr-rmn') || enParentOl.getAttribute('type') === 'i' || enParentOl.getAttribute('type') === 'I';
+        if (isAlpha || isRoman) {
+          const listType = isAlpha ? 'alphabetical (a, b, c...)' : 'Roman numeral (i, ii, iii...)';
+          qaIssues.push({
+            type: 'list_format_adapted',
+            severity: 'info',
+            enIndex: pair.enIndex,
+            frIndex: pair.frIndex,
+            title: `Block #${pair.enIndex + 1}: List format adapted to ${listType}`,
+            detail: `English HTML template applies <ol class="${enParentOl.className || 'type'}"> style (${listType}). The aligned French output inherits this structure while retaining translated text.`,
+            action: 'Format verified',
+          });
+        }
+      }
+    }
+  });
+
   return qaIssues;
 }
 
@@ -3903,6 +4246,7 @@ function closeSplitBlockModal() {
 }
 
 function applySplitBlock() {
+  const currentActiveBlock = state.activePreviewBlock;
   const targetIdx = state.splitBlockIndex;
   if (targetIdx === null || !state.frBlocks[targetIdx]) {
     closeSplitBlockModal();
@@ -3931,11 +4275,12 @@ function applySplitBlock() {
 
   state.frBlocks.splice(targetIdx, 1, block1, block2);
   closeSplitBlockModal();
-  computeAlignment();
+  computeAlignment(currentActiveBlock);
   showToast(`French block #${targetIdx + 1} split into 2 blocks! Alignment updated.`);
 }
 
 function mergeWithNextBlock(targetFrIdx) {
+  const currentActiveBlock = state.activePreviewBlock;
   if (targetFrIdx === undefined || targetFrIdx === null) {
     const pair = state.alignPairs.find((p) => p.enIndex === state.activePreviewBlock);
     targetFrIdx = pair ? pair.frIndex : state.activePreviewBlock;
@@ -3954,7 +4299,7 @@ function mergeWithNextBlock(targetFrIdx) {
   }
 
   state.frBlocks.splice(targetFrIdx + 1, 1);
-  computeAlignment();
+  computeAlignment(currentActiveBlock);
   showToast(`Merged block #${targetFrIdx + 1} with block #${targetFrIdx + 2}`);
 }
 
@@ -3984,20 +4329,47 @@ function renderStatsBar() {
   if (cLangEn) cLangEn.textContent = String(langEnIssues.length);
   if (cTables) cTables.textContent = String(tableData.tables.length + tableData.lists.length);
 
-  // Style tabs based on issue counts
+  // Style tabs based on issue counts and dim zero counts
   const tabMis = document.getElementById('tabMismatch');
   const tabMiss = document.getElementById('tabMissing');
   const tabExt = document.getElementById('tabExtra');
+  const tabSkip = document.getElementById('tabSkipped');
   const tabQa = document.getElementById('tabQaDiff');
   const tabTypoEl = document.getElementById('tabTypography');
   const tabLangEl = document.getElementById('tabLangEn');
+  const tabTablesEl = document.getElementById('tabTables');
 
-  if (tabMis) tabMis.classList.toggle('has-issues', nMis > 0);
-  if (tabMiss) tabMiss.classList.toggle('has-danger', nMiss > 0);
-  if (tabExt) tabExt.classList.toggle('has-issues', nExt > 0);
-  if (tabQa) tabQa.classList.toggle('has-issues', qaIssues.length > 0);
-  if (tabTypoEl) tabTypoEl.classList.toggle('has-issues', typoIssues.length > 0);
-  if (tabLangEl) tabLangEl.classList.toggle('has-issues', langEnIssues.length > 0);
+  if (tabMis) {
+    tabMis.classList.toggle('has-issues', nMis > 0);
+    tabMis.classList.toggle('is-dim', nMis === 0);
+  }
+  if (tabMiss) {
+    tabMiss.classList.toggle('has-danger', nMiss > 0);
+    tabMiss.classList.toggle('is-dim', nMiss === 0);
+  }
+  if (tabExt) {
+    tabExt.classList.toggle('has-issues', nExt > 0);
+    tabExt.classList.toggle('is-dim', nExt === 0);
+  }
+  if (tabSkip) {
+    tabSkip.classList.toggle('is-dim', nSkip === 0);
+  }
+  if (tabQa) {
+    tabQa.classList.toggle('has-notice', qaIssues.length > 0);
+    tabQa.classList.toggle('is-dim', qaIssues.length === 0);
+  }
+  if (tabTypoEl) {
+    tabTypoEl.classList.toggle('has-issues', typoIssues.length > 0);
+    tabTypoEl.classList.toggle('is-dim', typoIssues.length === 0);
+  }
+  if (tabLangEl) {
+    tabLangEl.classList.toggle('has-notice', langEnIssues.length > 0);
+    tabLangEl.classList.toggle('is-dim', langEnIssues.length === 0);
+  }
+  if (tabTablesEl) {
+    const tableListCount = tableData.tables.length + tableData.lists.length;
+    tabTablesEl.classList.toggle('is-dim', tableListCount === 0);
+  }
 
   // Update Drawer Tab counters
   const dQa = document.getElementById('drawerTabQaDiff');
@@ -4012,7 +4384,7 @@ function renderStatsBar() {
   const dSkip = document.getElementById('drawerTabSkipped');
 
   if (dQa) dQa.textContent = `QA & Diff (${qaIssues.length})`;
-  if (dTypo) dTypo.textContent = `French Typography (${typoIssues.length})`;
+  if (dTypo) dTypo.textContent = `Punctuation & Spaces (${typoIssues.length})`;
   if (dLang) dLang.textContent = `Smart lang="en" (${langEnIssues.length})`;
   if (dTables) dTables.textContent = `Tables & Lists (${tableData.tables.length + tableData.lists.length})`;
   if (dMis) dMis.textContent = `Mismatches (${nMis})`;
@@ -4027,19 +4399,19 @@ function renderStatsBar() {
   const hasWarnings = nMis > 0 || nExt > 0 || typoIssues.length > 0 || qaIssues.length > 0;
 
   if (healthPill) {
-    healthPill.className = 'preview-status-pill ' + (hasErrors ? 'status-danger' : hasWarnings ? 'status-warn' : 'status-clean');
+    healthPill.className = 'preview-status-pill ' + (hasErrors ? 'status-danger' : hasWarnings ? 'status-warn' : 'status-clean') + ' cursor-pointer hover:opacity-90';
     
     if (hasErrors) {
       healthPill.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-rose-500"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" x2="12" y2="12"/><line x1="12" x2="12" y1="16" x2="12.01" y2="16"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-rose-500"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" x2="12" y2="12"/><line x1="12" x2="12" y1="16" x2="12.01" y2="16"/></svg>
         <span>${nMiss} missing block(s) • ${nMatched}/${nEn} matched</span>`;
     } else if (hasWarnings) {
       healthPill.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-amber-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" x2="13"/><line x1="12" x2="12" y1="17" x2="12.01" y2="17"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-amber-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" x2="13"/><line x1="12" x2="12" y1="17" x2="12.01" y2="17"/></svg>
         <span>${nMis > 0 ? `${nMis} mismatches` : typoIssues.length > 0 ? `${typoIssues.length} typo notices` : `${qaIssues.length} QA notice(s)`} • ${nMatched}/${nEn} matched</span>`;
     } else {
       healthPill.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
         <span>100% Aligned • ${nMatched} blocks matched</span>`;
     }
   }
@@ -4246,20 +4618,30 @@ function renderDrawerBody(category) {
               <span class="tag tag-fr text-[10px]">FR #${item.frIndex + 1}</span>
               <span class="text-xs font-bold text-text">${item.issues.map((iss) => iss.label).join(', ')}</span>
             </div>
-            <div class="grid grid-cols-2 gap-2 text-xs font-mono p-2 rounded bg-surface-soft border border-border">
-              <div>
-                <span class="text-text-muted text-[10px] block mb-0.5">CURRENT TEXT:</span>
-                <span class="text-rose-500 line-through">${escapeHtml(issueSnippet(item.originalText, 75))}</span>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono p-2.5 rounded-lg bg-surface-soft border border-border">
+              <div class="overflow-hidden">
+                <div class="flex items-center gap-1.5 text-text-muted text-[10px] font-sans font-semibold mb-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                  <span>CURRENT TEXT:</span>
+                </div>
+                <div class="text-text leading-relaxed whitespace-pre-wrap break-words">
+                  ${highlightTypoOriginal(getTypoSnippetWindow(item.originalText, 140))}
+                </div>
               </div>
-              <div>
-                <span class="text-text-muted text-[10px] block mb-0.5">SUGGESTED FRENCH TYPOGRAPHY:</span>
-                <span class="text-emerald-500 font-semibold">${escapeHtml(issueSnippet(item.fixedText, 75))}</span>
+              <div class="overflow-hidden">
+                <div class="flex items-center gap-1.5 text-text-muted text-[10px] font-sans font-semibold mb-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  <span>SUGGESTED FRENCH TYPOGRAPHY:</span>
+                </div>
+                <div class="text-text leading-relaxed whitespace-pre-wrap break-words">
+                  ${highlightTypoFixed(getTypoSnippetWindow(item.fixedText, 140))}
+                </div>
               </div>
             </div>
           </div>
           <div class="flex flex-col gap-1.5 pt-1">
             <button type="button" class="btn btn-primary text-xs px-3 py-1 fix-typo-btn" data-fr-idx="${item.frIndex}">
-              Fix Typo
+              Fix Spacing
             </button>
             <button type="button" class="btn btn-secondary text-xs px-2.5 py-0.5 issue-row-clickable" data-jump-fr="${item.frIndex}">
               Jump →
@@ -4273,12 +4655,12 @@ function renderDrawerBody(category) {
         ${diagHeader}
         <div class="p-3.5 bg-surface-soft border-b border-border flex items-center justify-between">
           <div>
-            <div class="text-xs font-bold text-text">French Typography &amp; Non-Breaking Space Linter</div>
+            <div class="text-xs font-bold text-text">French Punctuation &amp; Non-Breaking Space Linter</div>
             <div class="text-[11px] text-text-secondary">${typoList.length} block(s) require non-breaking spaces (&nbsp; / insécables)</div>
           </div>
           <button type="button" id="fixAllTypoBtn" class="btn btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <span>Fix All Typography (${typoList.length})</span>
+            <span>Fix All Spaces &amp; Punctuation (${typoList.length})</span>
           </button>
         </div>
         <div>${rows}</div>`;
@@ -5482,6 +5864,18 @@ function initEventListeners() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       showToast('Downloaded French HTML');
+    });
+  }
+
+  // Health Pill quick drawer open
+  if (healthPill) {
+    healthPill.addEventListener('click', () => {
+      if (state.drawerOpen) {
+        closeDrawer();
+      } else {
+        const cat = state.issueGroups.missing.length > 0 ? 'missing' : state.issueGroups.mismatch.length > 0 ? 'mismatch' : 'qa-diff';
+        openDrawer(cat);
+      }
     });
   }
 

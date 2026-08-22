@@ -1428,41 +1428,82 @@ td.bg-primary a:visited {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background: rgba(0,0,0,0.06);
-  border: none;
-  color: currentColor;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--text);
   cursor: pointer;
-  transition: background .12s ease;
+  transition: all .15s ease;
 }
 
-.preview-stepper-btn:hover {
-  background: rgba(0,0,0,0.12);
+.preview-stepper-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.preview-stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.preview-issue-stepper-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  padding: 2px 4px;
+  border-radius: 7px;
+}
+
+.preview-stepper-counter {
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 700;
+  color: var(--text-secondary);
+  padding: 0 4px;
+  min-width: 32px;
+  text-align: center;
 }
 
 .preview-segmented-bar {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 3px;
+  padding: 2px 3px;
   background: var(--surface-soft);
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 8px;
+}
+
+.preview-segmented-bar-issues {
+  background: rgba(244, 63, 94, 0.04);
+  border-color: rgba(244, 63, 94, 0.18);
+}
+
+.preview-segmented-bar-audits {
+  background: rgba(99, 102, 241, 0.04);
+  border-color: rgba(99, 102, 241, 0.18);
+}
+
+.preview-segmented-bar-meta {
+  background: var(--surface-soft);
 }
 
 .preview-segment-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: 5px;
+  padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   user-select: none;
@@ -1475,31 +1516,80 @@ td.bg-primary a:visited {
   background: var(--surface-hover);
 }
 
+.preview-segment-tab.is-dim {
+  opacity: 0.55;
+}
+
+.preview-segment-tab.is-dim:hover {
+  opacity: 0.9;
+}
+
 .preview-segment-tab.is-active {
   background: var(--surface);
   color: var(--accent);
   border-color: var(--border-strong);
   box-shadow: var(--shadow-sm);
+  opacity: 1 !important;
+}
+
+.preview-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-danger {
+  background: #f43f5e;
+  box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
+}
+
+.dot-warn {
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+.dot-muted {
+  background: #94a3b8;
 }
 
 .preview-segment-tab.has-issues {
   color: var(--warning);
+  opacity: 1 !important;
 }
 
-.preview-segment-tab.has-issues.is-active {
-  color: var(--warning);
-  border-color: var(--warning-border);
-  background: var(--warning-soft);
+.preview-segment-tab.has-issues .preview-tab-count {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #d97706;
+}
+html[data-theme="dark"] .preview-segment-tab.has-issues .preview-tab-count {
+  color: #fbbf24;
 }
 
 .preview-segment-tab.has-danger {
   color: var(--danger);
+  opacity: 1 !important;
 }
 
-.preview-segment-tab.has-danger.is-active {
-  color: var(--danger);
-  border-color: var(--danger-border);
-  background: var(--danger-soft);
+.preview-segment-tab.has-danger .preview-tab-count {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: rgba(244, 63, 94, 0.4);
+  color: #e11d48;
+}
+html[data-theme="dark"] .preview-segment-tab.has-danger .preview-tab-count {
+  color: #fb7185;
+}
+
+.preview-segment-tab.has-notice {
+  color: var(--accent);
+  opacity: 1 !important;
+}
+
+.preview-segment-tab.has-notice .preview-tab-count {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: var(--accent);
 }
 
 .preview-tab-count {
