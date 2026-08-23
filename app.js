@@ -339,47 +339,69 @@ function cleanFrenchHtmlPostProcess(html) {
     const cleanedInner = inner.replace(/<\/?(strong|b)(\s+[^>]*)?>/gi, '');
     return `<th${thAttrs || ''}>${cleanedInner}</th>`;
   });
+  // Convert non-breaking space characters (\u00A0) to explicit &nbsp; in generated HTML
+  res = res.replace(/\u00A0/g, '&nbsp;');
   return res;
 }
 
+
 function getBlockContent(el) {
-  const tag = el.tagName.toLowerCase();
-  if (tag === 'img') return el.getAttribute('alt') || '';
-  if (['input', 'textarea'].includes(tag) && el.hasAttribute('placeholder'))
-    return el.getAttribute('placeholder') || '';
-  if (['input', 'button'].includes(tag) && el.hasAttribute('aria-label'))
-    return el.getAttribute('aria-label') || '';
+  if (!el) return "";
+  const tag = el.tagName ? el.tagName.toLowerCase() : "";
+  if (tag === "img") return el.getAttribute("alt") || "";
+  if (["input", "textarea"].includes(tag) && el.hasAttribute("placeholder"))
+    return el.getAttribute("placeholder") || "";
+  if (["input", "button"].includes(tag) && el.hasAttribute("aria-label"))
+    return el.getAttribute("aria-label") || "";
   
-  // If this element contains child nested lists (e.g. <li> with a child <ul> or <ol>),
-  // clone the element and remove child <ul> and <ol> so getBlockContent returns ONLY
-  // the text belonging to the parent list item (e.g. "Risk assessment considerations").
   const clone = el.cloneNode(true);
-  clone.querySelectorAll('ul, ol').forEach((childList) => childList.remove());
-  clone.querySelectorAll('.fn-rtn, a[href*="-rf"]').forEach((rtn) => rtn.remove());
-  clone.querySelectorAll('.wb-inv').forEach((inv) => {
+  clone.querySelectorAll("ul, ol").forEach((childList) => childList.remove());
+  clone.querySelectorAll(".fn-rtn, a[href*=\"-rf\"]").forEach((rtn) => rtn.remove());
+  clone.querySelectorAll(".wb-inv").forEach((inv) => {
     if (/Footnote|Note de bas de page|Return to footnote|Retour à la référence/i.test(inv.textContent)) {
       inv.remove();
     }
   });
-  return (clone.textContent || '').replace(/\s+/g, ' ').trim();
+  return (clone.textContent || "").replace(/[ \t\r\n]+/g, " ").trim();
+}
+
+function cleanFrenchUrlAndEntities(text) {
+  if (!text) return '';
+  return text
+    .replace(/(?:https?|ftp|mailto|file):\/\/[^\s<>"'\\]+/gi, (url) =>
+      url.replace(/:/g, '__COLON__').replace(/;/g, '__SEMI__').replace(/\?/g, '__Q__').replace(/!/g, '__EXCL__')
+    )
+    .replace(/&[a-zA-Z0-9#]+;/g, (ent) => ent.replace(/;/g, '__SEMI__'));
+}
+
+function restoreFrenchUrlAndEntities(text) {
+  if (!text) return '';
+  return text
+    .replace(/__COLON__/g, ':')
+    .replace(/__SEMI__/g, ';')
+    .replace(/__Q__/g, '?')
+    .replace(/__EXCL__/g, '!');
 }
 
 function applyFrenchTypographyRules(text) {
   if (!text) return text;
-  return text
-    // Two-part punctuation marks require non-breaking space before them: : ; ? !
-    .replace(/(?:[ \t\r\n\u00A0]*)([:;?!])/g, '\u00A0$1')
+  let t = cleanFrenchUrlAndEntities(text);
+  t = t
+    // Replace regular space(s) or lack of space before : ; ? ! with non-breaking space (\u00A0)
+    .replace(/([^\s\u00A0:;?!])[ \t]*([:;?!])/g, '$1\u00A0$2')
     // Guillemets: non-breaking space inside quotes
     .replace(/«[ \t\r\n\u00A0]*/g, '«\u00A0')
     .replace(/[ \t\r\n\u00A0]*»/g, '\u00A0»')
-    // Currency symbols ($ and €) require non-breaking space before them when following numbers
+    // Currency symbols ($ and €) require non-breaking space between number and currency
     .replace(/(\d)[ \t\r\n\u00A0]*([$€])/g, '$1\u00A0$2')
     // Percentage (%) symbol requires non-breaking space before it when following numbers
     .replace(/(\d)[ \t\r\n\u00A0]*%/g, '$1\u00A0%')
-    // Numbered ordinals: 1er, 2e, etc. with non-breaking space after numbers when followed by units (km, h, min, s, etc.)
-    .replace(/(\d)[ \t\r\n\u00A0]+(km|kg|mg|m|cm|mm|h|min|s|ans|jours|mois|pages|p\.|art\.|no|n°)\b/gi, '$1\u00A0$2')
-    // Prevent accidental double non-breaking spaces
+    // Numbered units (km, h, min, s, jours, ans, mois, etc.) with non-breaking space after numbers
+    .replace(/(\d)[ \t\r\n\u00A0]+(km|kg|mg|g|m|cm|mm|ha|t|l|ml|h|min|s|ans|an|jours|jour|mois|semaines|semaine|pages|page|p\.|art\.|no|n°|nº|§)\b/gi, '$1\u00A0$2')
+    // Prevent accidental double non-breaking spaces or regular space + non-breaking space combos
+    .replace(/[ \t]*\u00A0+[ \t]*/g, '\u00A0')
     .replace(/\u00A0+/g, '\u00A0');
+  return restoreFrenchUrlAndEntities(t);
 }
 
 function extractBlockSpans(el) {
@@ -390,7 +412,7 @@ function extractBlockSpans(el) {
     return [
       {
         type,
-        text: (el.textContent || '').replace(/\s+/g, ' ').trim(),
+        text: (el.textContent || '').replace(/[ \t\r\n]+/g, ' ').trim(),
         href: type === 'a' ? el.getAttribute('href') || '' : undefined,
         lang: el.getAttribute('lang') || undefined,
       },
@@ -423,7 +445,7 @@ function extractBlockSpans(el) {
       const type = spanType(n.tagName.toLowerCase());
       return {
         type,
-        text: (n.textContent || '').replace(/\s+/g, ' ').trim(),
+        text: (n.textContent || '').replace(/[ \t\r\n]+/g, ' ').trim(),
         href: type === 'a' ? n.getAttribute('href') || '' : undefined,
         lang: n.getAttribute('lang') || undefined,
       };
@@ -612,7 +634,6 @@ function replaceBlockTextPreservingLinks(
   attrTarget = 'text',
   frSpans = []
 ) {
-  newText = applyFrenchTypographyRules(newText);
   if (attrTarget !== 'text') {
     el.setAttribute(attrTarget, newText);
     return { unresolvedLinks: 0 };
@@ -3717,12 +3738,13 @@ function updateSyncStatusLabel() {
 // --- Feature 1: French Typography & Non-Breaking Spaces (&nbsp; / insécables) ---
 function findFrenchTypographyIssues(text) {
   if (!text) return [];
+  const clean = cleanFrenchUrlAndEntities(text);
   const issues = [];
   
   // 1. Missing non-breaking space before : ; ! ?
-  const punctRegex = /([^\s\u00A0])\s*([:;?!])/g;
+  const punctRegex = /([^\s\u00A0:;?!])[ \t]*([:;?!])/g;
   let match;
-  while ((match = punctRegex.exec(text)) !== null) {
+  while ((match = punctRegex.exec(clean)) !== null) {
     issues.push({
       type: 'punctuation',
       label: `Missing insécable before '${match[2]}'`,
@@ -3732,7 +3754,8 @@ function findFrenchTypographyIssues(text) {
   }
 
   // 2. Missing non-breaking space inside guillemets « ... »
-  if (text.includes('«') && !text.includes('«\u00A0') && !text.includes('«&#160;') && !text.includes('«&nbsp;')) {
+  const openGuill = /«(?!\u00A0)/g;
+  while ((match = openGuill.exec(clean)) !== null) {
     issues.push({
       type: 'guillemet-open',
       label: 'Missing insécable after «',
@@ -3740,7 +3763,9 @@ function findFrenchTypographyIssues(text) {
       fix: '«\u00A0'
     });
   }
-  if (text.includes('»') && !text.includes('\u00A0»') && !text.includes('&#160;»') && !text.includes('&nbsp;»')) {
+
+  const closeGuill = /(?<!\u00A0)»/g;
+  while ((match = closeGuill.exec(clean)) !== null) {
     issues.push({
       type: 'guillemet-close',
       label: 'Missing insécable before »',
@@ -3750,29 +3775,36 @@ function findFrenchTypographyIssues(text) {
   }
 
   // 3. Currency symbol without non-breaking space (e.g. "10 $" or "10$")
-  const currRegex = /(\d)\s*([$€])/g;
-  while ((match = currRegex.exec(text)) !== null) {
-    if (!match[0].includes('\u00A0')) {
-      issues.push({
-        type: 'currency',
-        label: `Missing insécable before currency '${match[2]}'`,
-        found: match[0],
-        fix: `${match[1]}\u00A0${match[2]}`
-      });
-    }
+  const currRegex = /(\d)(?!\u00A0)[ \t]*([$€])/g;
+  while ((match = currRegex.exec(clean)) !== null) {
+    issues.push({
+      type: 'currency',
+      label: `Missing insécable before currency '${match[2]}'`,
+      found: match[0],
+      fix: `${match[1]}\u00A0${match[2]}`
+    });
   }
 
   // 4. Percentage symbol without non-breaking space (e.g. "10 %" or "10%")
-  const pctRegex = /(\d)\s*%/g;
-  while ((match = pctRegex.exec(text)) !== null) {
-    if (!match[0].includes('\u00A0')) {
-      issues.push({
-        type: 'percent',
-        label: `Missing insécable before '%'`,
-        found: match[0],
-        fix: `${match[1]}\u00A0%`
-      });
-    }
+  const pctRegex = /(\d)(?!\u00A0)[ \t]*%/g;
+  while ((match = pctRegex.exec(clean)) !== null) {
+    issues.push({
+      type: 'percent',
+      label: `Missing insécable before '%'`,
+      found: match[0],
+      fix: `${match[1]}\u00A0%`
+    });
+  }
+
+  // 5. Units & Time / Quantity without non-breaking space (e.g. "7 jours", "10 km", "5 ans")
+  const unitRegex = /(\d)(?!\u00A0)[ \t]+(km|kg|mg|g|m|cm|mm|ha|t|l|ml|h|min|s|ans|an|jours|jour|mois|semaines|semaine|pages|page|p\.|art\.|no|n°|nº|§)\b/gi;
+  while ((match = unitRegex.exec(clean)) !== null) {
+    issues.push({
+      type: 'unit',
+      label: `Missing insécable before unit '${match[2]}'`,
+      found: match[0],
+      fix: `${match[1]}\u00A0${match[2]}`
+    });
   }
 
   return issues;
@@ -3780,10 +3812,10 @@ function findFrenchTypographyIssues(text) {
 
 function getTypoSnippetWindow(text, max = 150) {
   if (!text) return '';
-  const clean = text.replace(/\s+/g, ' ').trim();
+  const clean = text.replace(/[ \t\r\n]+/g, ' ').trim();
   if (clean.length <= max) return clean;
 
-  const match = clean.match(/[:;?!«»$%]|\d\s*(?:km|kg|mg|m|cm|mm|h|min|s|ans|jours|mois|pages|p\.|art\.|no|n°)\b/i);
+  const match = clean.match(/[:;?!«»$%]|\d\s*(?:km|kg|mg|g|m|cm|mm|ha|t|l|ml|h|min|s|ans|an|jours|jour|mois|semaines|semaine|pages|page|p\.|art\.|no|n°|nº|§)\b/i);
   if (!match || match.index === undefined) {
     return clean.slice(0, max) + '…';
   }
@@ -3808,8 +3840,8 @@ function highlightTypoOriginal(text) {
   let escaped = escapeHtml(text);
 
   // 1. Punctuation missing non-breaking space (e.g. " :", ":", " ;", ";", " !", " ?", etc.)
-  escaped = escaped.replace(/([^\s\u00A0&])([ \t]*)([:;?!])/g, (match, p1, p2, p3) => {
-    return `${p1}<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-500/40 inline-flex items-center" title="Missing non-breaking space (&nbsp;)">${p2 || ''}${p3}</span>`;
+  escaped = escaped.replace(/(?<=[^\s\u00A0:;?!/&])([ \t]*)([:;?!])/g, (match, p1, p2) => {
+    return `<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-500/40 inline-flex items-center" title="Missing non-breaking space (&nbsp;)">${p1 || ''}${p2}</span>`;
   });
 
   // 2. Guillemets without non-breaking space
@@ -3836,8 +3868,8 @@ function highlightTypoOriginal(text) {
     return `${p1}<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-500/40 inline-flex items-center" title="Missing non-breaking space before %">${p2 || ''}${p3}</span>`;
   });
 
-  // 5. Units (e.g. "10 km", "5 ans")
-  escaped = escaped.replace(/(\d)([ \t]+)(km|kg|mg|m|cm|mm|h|min|s|ans|jours|mois|pages|p\.|art\.|no|n°)\b/gi, (match, p1, p2, p3) => {
+  // 5. Units (e.g. "10 km", "5 ans", "7 jours")
+  escaped = escaped.replace(/(\d)([ \t]+)(km|kg|mg|g|m|cm|mm|ha|t|l|ml|h|min|s|ans|an|jours|jour|mois|semaines|semaine|pages|page|p\.|art\.|no|n°|nº|§)\b/gi, (match, p1, p2, p3) => {
     return `${p1}<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-500/40 inline-flex items-center" title="Missing non-breaking space before unit">${p2}${p3}</span>`;
   });
 
@@ -3872,7 +3904,7 @@ function highlightTypoFixed(text) {
   });
 
   // 5. Units with non-breaking space (\d\u00A0unit)
-  escaped = escaped.replace(/(\d)\u00A0(km|kg|mg|m|cm|mm|h|min|s|ans|jours|mois|pages|p\.|art\.|no|n°)\b/gi, (match, p1, p2) => {
+  escaped = escaped.replace(/(\d)\u00A0(km|kg|mg|g|m|cm|mm|ha|t|l|ml|h|min|s|ans|an|jours|jour|mois|semaines|semaine|pages|page|p\.|art\.|no|n°|nº|§)\b/gi, (match, p1, p2) => {
     return `${p1}<span class="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/40 inline-flex items-center gap-1" title="Non-breaking space applied (&nbsp;)"><span class="text-[9px] px-1 py-0.2 bg-emerald-500/30 rounded font-mono text-emerald-800 dark:text-emerald-200">NBSP</span>${p2}</span>`;
   });
 
@@ -3900,6 +3932,10 @@ function fixFrenchTypographyBlock(frIdx) {
   if (!state.frBlocks[frIdx]) return;
   state.frBlocks[frIdx].text = applyFrenchTypographyRules(state.frBlocks[frIdx].text);
   computeAlignment();
+  if (state.frViewMode === 'code' && frCodeEditor) {
+    frCodeEditor.value = generateFrenchHtmlSource();
+    updateFrCodeView();
+  }
   renderDrawerBody('typography');
   showToast(`French typography fixed for block #${frIdx + 1}`);
 }
@@ -3915,6 +3951,10 @@ function fixAllFrenchTypography() {
     }
   });
   computeAlignment(currentActiveBlock);
+  if (state.frViewMode === 'code' && frCodeEditor) {
+    frCodeEditor.value = generateFrenchHtmlSource();
+    updateFrCodeView();
+  }
   renderDrawerBody('typography');
   showToast(`Applied French typography & non-breaking spaces across ${count} block(s)!`);
 }
@@ -5041,7 +5081,7 @@ function formatHtmlCode(html) {
     for (let i = 0; i < el.childNodes.length; i++) {
       const child = el.childNodes[i];
       if (child.nodeType === Node.TEXT_NODE) {
-        result += child.nodeValue.replace(/\s+/g, ' ');
+        result += child.nodeValue.replace(/[ \t\r\n]+/g, ' ');
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         const tag = child.tagName.toLowerCase();
         const attrs = serializeAttributes(child);
@@ -5061,7 +5101,7 @@ function formatHtmlCode(html) {
     const indent = tab.repeat(level);
 
     if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.nodeValue.replace(/\s+/g, ' ').trim();
+      const text = node.nodeValue.replace(/[ \t\r\n]+/g, ' ').trim();
       return text ? `${indent}${text}\n` : '';
     }
 
@@ -5241,7 +5281,10 @@ function generateFrenchHtmlSource() {
       editables.forEach((el) => {
         const frIdx = el.hasAttribute('data-fr-index') ? parseInt(el.getAttribute('data-fr-index'), 10) : null;
         if (frIdx !== null && state.frBlocks[frIdx]) {
-          state.frBlocks[frIdx].text = el.innerText.trim();
+          const liveText = getBlockContent(el);
+          if (liveText && liveText.replace(/\u00A0/g, ' ') !== (state.frBlocks[frIdx].text || '').replace(/\u00A0/g, ' ')) {
+            state.frBlocks[frIdx].text = liveText;
+          }
         }
       });
     }
