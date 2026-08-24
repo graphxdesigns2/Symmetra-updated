@@ -1308,6 +1308,12 @@ html[data-theme="light"] #previewSection .preview-header .fr-view-btn.is-active 
   font-weight: 400 !important;
 }
 
+.hl-entity,
+.hl-nbsp {
+  color: #f472b6;
+  font-weight: 400 !important;
+}
+
 /* Canada.ca / GCWeb Contextual Utilities */
 ul.list-unstyled, ol.list-unstyled,
 .list-unstyled,
