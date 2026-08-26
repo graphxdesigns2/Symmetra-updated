@@ -419,15 +419,15 @@
           <div class="preview-stats-dock" id="previewStatsBar">
             <div class="preview-stats-dock-inner">
               <!-- Left Section: Health Pill -->
-              <div class="flex items-center gap-2" id="healthPillContainer">
+              <div class="flex items-center gap-2 shrink-0" id="healthPillContainer">
                 <button type="button" class="preview-status-pill status-clean cursor-pointer hover:opacity-90" id="healthPill" title="Click to open full audit drawer">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
                   <span id="healthPillText">100% Aligned • 0 blocks matched</span>
                 </button>
               </div>
 
-              <!-- Center Section: Clean, Simplified Categorized Tabs -->
-              <div class="flex items-center gap-2 flex-wrap">
+              <!-- Center Section: Clean, Single-line Categorized Tabs -->
+              <div class="preview-segmented-container flex items-center gap-1.5 flex-nowrap shrink min-w-0 overflow-x-auto">
                 <!-- Group 1: Alignment Issues (Critical) -->
                 <div class="preview-segmented-bar preview-segmented-bar-issues" title="Alignment Status & Issues">
                   <button type="button" class="preview-segment-tab is-dim" data-category="missing" id="tabMissing" title="Missing French blocks (Critical)">
@@ -446,19 +446,19 @@
                 <!-- Group 2: Content QA & Localization Audits -->
                 <div class="preview-segmented-bar preview-segmented-bar-audits" title="Content Quality, QA Diff & Typography">
                   <button type="button" class="preview-segment-tab" data-category="qa-diff" id="tabQaDiff" title="Inspect Side-by-Side QA Diff, Links & Formatting">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-accent"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-accent"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
                     <span>QA Diff</span>
                     <span class="preview-tab-count" id="cQaDiff">0</span>
                   </button>
 
                   <button type="button" class="preview-segment-tab" data-category="typography" id="tabTypography" title="French non-breaking spaces & punctuation (&nbsp;)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-emerald-500"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></svg>
-                    <span>Punctuation/Spaces</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-emerald-500"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></svg>
+                    <span>Spaces</span>
                     <span class="preview-tab-count" id="cTypo">0</span>
                   </button>
 
                   <button type="button" class="preview-segment-tab" data-category="lang-en" id="tabLangEn" title="Untranslated English quotes & terms">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-cyan-500"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-cyan-500"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                     <span>lang="en"</span>
                     <span class="preview-tab-count" id="cLangEn">0</span>
                   </button>
@@ -467,37 +467,37 @@
                 <!-- Group 3: Document Structure & Tags -->
                 <div class="preview-segmented-bar preview-segmented-bar-meta" title="Document Structure & Tags">
                   <button type="button" class="preview-segment-tab" data-category="tables-lists" id="tabTables" title="Table and List integrity">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-indigo-400"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
-                    <span>Tables/Lists</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-indigo-400"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
+                    <span>Tables</span>
                     <span class="preview-tab-count" id="cTables">0</span>
                   </button>
 
                   <button type="button" class="preview-segment-tab" data-category="en-tags" id="tabEnTags" title="Source vs Translation tag counts">
-                    <span class="tag tag-en text-[9px] py-0 px-1">EN</span>
+                    <span class="tag tag-en text-[9px] py-0 px-1 font-mono">EN</span>
                     <span class="preview-tab-count" id="cEn">0</span>
                     <span class="text-text-muted text-[10px]">/</span>
-                    <span class="tag tag-fr text-[9px] py-0 px-1">FR</span>
+                    <span class="tag tag-fr text-[9px] py-0 px-1 font-mono">FR</span>
                     <span class="preview-tab-count" id="cFr">0</span>
                   </button>
                 </div>
               </div>
 
               <!-- Active Block Location HUD, Re-alignment Split/Merge & Direct Jump -->
-              <div class="preview-dock-hud">
+              <div class="preview-dock-hud shrink-0">
                 <!-- Split & Merge Action Buttons for Active Block -->
                 <div class="flex items-center gap-1 mr-1 border-r border-border pr-2">
-                  <button type="button" id="splitActiveBlockBtn" class="btn btn-secondary text-[11px] px-2 py-1 flex items-center gap-1" title="Split the active French block into two blocks">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                  <button type="button" id="splitActiveBlockBtn" class="btn btn-secondary text-[11px] px-2 py-0.5 flex items-center gap-1" title="Split active French block into two blocks">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
                     <span>Split</span>
                   </button>
-                  <button type="button" id="mergeActiveBlockBtn" class="btn btn-secondary text-[11px] px-2 py-1 flex items-center gap-1" title="Merge the active French block with the next block">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/></svg>
-                    <span>Merge Next</span>
+                  <button type="button" id="mergeActiveBlockBtn" class="btn btn-secondary text-[11px] px-2 py-0.5 flex items-center gap-1" title="Merge active French block with next block">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/></svg>
+                    <span>Merge</span>
                   </button>
                 </div>
 
                 <div class="preview-block-stepper">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-accent"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-accent"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                   <button type="button" id="blockJumpToggleBtn" class="hover:underline font-mono" title="Click to jump to a specific block number">
                     <span id="activeBlockHudText">Block 1/1</span>
                     <span class="ml-1 text-accent font-semibold" id="activeBlockHudTag">&lt;p&gt;</span>
@@ -505,10 +505,10 @@
 
                   <div class="flex items-center gap-0.5 ml-1 border-l border-border pl-1">
                     <button type="button" id="prevBlockBtn" class="p-0.5 hover:bg-surface-hover rounded text-text-secondary hover:text-text" title="Previous block (↑)">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><path d="m18 15-6-6-6 6"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3"><path d="m18 15-6-6-6 6"/></svg>
                     </button>
                     <button type="button" id="nextBlockBtn" class="p-0.5 hover:bg-surface-hover rounded text-text-secondary hover:text-text" title="Next block (↓)">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><path d="m6 9 6 6 6-6"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                   </div>
                 </div>

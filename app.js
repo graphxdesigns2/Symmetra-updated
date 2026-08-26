@@ -1,43 +1,231 @@
 import mammoth from 'mammoth';
 
 // Sample data
-const SAMPLE_EN_HTML = `<section>
-  <h2>Employment insurance benefits and leave</h2>
-  <p>Find information on Employment Insurance (EI) benefits, including sickness, maternity, and parental leave.</p>
-  
-  <h3>Eligibility requirements</h3>
-  <p>To qualify for regular benefits, you must meet the following criteria:</p>
-  <ul>
-    <li>You were employed in insurable employment.</li>
-    <li>You lost your job through no fault of your own.</li>
-    <li>You have been without work and pay for at least 7 consecutive days.</li>
-  </ul>
+const SAMPLE_EN_HTML = `<h1>Canada Workers and Employment Benefits Guide</h1>
+<p>Find comprehensive information on federal employment insurance benefits, sickness allowances, maternity and parental leave, and career transition supports available to workers across Canada.</p>
 
-  <h3>How to apply</h3>
-  <p>Submit your application online through the official portal. You should apply as soon as possible after you stop working.</p>
-  
-  <p>For more details, consult the <a href="https://www.canada.ca/en/services/benefits/ei.html">Employment Insurance overview</a>.</p>
-
-  <section class="alert alert-info">
-    <h3>Important notice</h3>
-    <p>Always have your <strong>Social Insurance Number (SIN)</strong> ready before starting.</p>
-  </section>
-</section>`;
-
-const SAMPLE_FR_DOCX_HTML = `<h2>Prestations d'assurance-emploi et congés</h2>
-<p>Trouvez des renseignements sur les prestations d'assurance-emploi (AE), y compris les congés de maladie, de maternité et parentaux.</p>
-<h3>Critères d'admissibilité</h3>
-<p>Pour être admissible aux prestations régulières, vous devez répondre aux critères suivants :</p>
+<h2>On this page</h2>
 <ul>
-  <li>Vous occupiez un emploi assurable.</li>
-  <li>Vous avez perdu votre emploi sans en être responsable.</li>
-  <li>Vous avez été sans travail et sans rémunération pendant au moins 7 jours consécutifs.</li>
+  <li><a href="#overview">Program overview</a></li>
+  <li><a href="#eligibility">Eligibility and qualifying criteria</a></li>
+  <li><a href="#rates">Benefit rates and regional thresholds</a></li>
+  <li><a href="#details">Additional documentation and procedures</a></li>
+  <li><a href="#notices">Important notices and obligations</a></li>
+  <li><a href="#fn">Footnotes and references</a></li>
 </ul>
-<h3>Comment présenter une demande</h3>
-<p>Présentez votre demande en ligne par l'intermédiaire du portail officiel. Vous devez présenter votre demande dès que possible après avoir cessé de travailler.</p>
-<p>Pour en savoir plus, consultez <a href="https://www.canada.ca/fr/services/prestations/ae.html">l'aperçu de l'assurance-emploi</a>.</p>
-<h3>Avis important</h3>
-<p>Ayez toujours votre <strong>numéro d'assurance sociale (NAS)</strong> à portée de main avant de commencer.</p>`;
+
+<h2 id="overview">Program overview</h2>
+<p class="well">Employment Insurance (EI) provides temporary income support to individuals who have lost their employment through no fault of their own or who take leave for specific life events.</p>
+
+<h2 id="eligibility">Eligibility and qualifying criteria</h2>
+<p>To qualify for regular benefit payments, applicants must satisfy several specific criteria depending on their employment classification:</p>
+
+<ul>
+  <li>Standard qualifying requirements:
+    <ul>
+      <li>You were employed in insurable employment for the required hours.</li>
+      <li>You have experienced at least 7 consecutive calendar days without work or insurable earnings.</li>
+      <li>You are capable of and available for work each day.</li>
+    </ul>
+  </li>
+  <li>Special program conditions:
+    <ul>
+      <li>Self-employed workers must register at least 12 months prior to submitting a claim.</li>
+      <li>Seasonal agricultural employees require verified regional work vouchers.</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="rates">Benefit rates and regional thresholds</h2>
+<p>The amount and duration of benefits depend on your average weekly insurable earnings and the unemployment rate in your economic region<sup id="fn1-rf"><a class="fn-lnk" href="#fn1"><span class="wb-inv">Footnote </span>1</a></sup>.</p>
+
+<table class="table table-bordered">
+  <caption>Table 1: Weekly benefit rates, minimum insurable hours, and duration by region</caption>
+  <thead class="bg-primary">
+    <tr>
+      <th scope="col">Regional tier</th>
+      <th scope="col">Minimum insurable hours</th>
+      <th scope="col">Maximum weekly benefit<sup id="fn2-rf"><a class="fn-lnk" href="#fn2"><span class="wb-inv">Footnote </span>2</a></sup></th>
+      <th scope="col">Benefit duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">Tier 1 (High unemployment)</th>
+      <td>420 hours</td>
+      <td>$668 per week</td>
+      <td>Up to 45 weeks</td>
+    </tr>
+    <tr>
+      <th scope="row">Tier 2 (Moderate unemployment)</th>
+      <td>560 hours</td>
+      <td>$668 per week</td>
+      <td>Up to 36 weeks</td>
+    </tr>
+    <tr>
+      <th scope="row">Tier 3 (Low unemployment)</th>
+      <td>700 hours</td>
+      <td>$668 per week</td>
+      <td>Up to 26 weeks</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="details">Additional documentation and procedures</h2>
+<p>Review the collapsible sections below for instructions on submitting required verification files and keeping your profile updated.</p>
+
+<details>
+  <summary>How to submit supporting records of employment</summary>
+  <p>Your employer will typically submit your electronic Record of Employment (ROE) directly to Service Canada. If you receive an official paper copy, submit it online through your account portal or mail it to your processing centre.</p>
+</details>
+
+<details>
+  <summary>Reporting changes in earnings or availability</summary>
+  <p>You must complete bi-weekly claimant reports and report any gross earnings, vacation pay, training allowances, or temporary self-employment hours earned during each reporting period.</p>
+</details>
+
+<h2 id="notices">Important notices and obligations</h2>
+<p>Please review these mandatory operational notices before filing your application.</p>
+
+<section class="alert alert-info">
+  <h3>Information notice</h3>
+  <p>Always have your 9-digit <strong>Social Insurance Number (SIN)</strong>, direct deposit details, and residential postal code ready before submitting your claim.</p>
+</section>
+
+<section class="alert alert-warning">
+  <h3>Warning notice</h3>
+  <p>Failing to submit your bi-weekly report within 3 weeks of the due date will cause your benefit payments to be suspended.</p>
+</section>
+
+<section class="alert alert-danger">
+  <h3>Legal and penalty notice</h3>
+  <p>Knowingly providing false or misleading statements constitutes a federal offence subject to substantial administrative monetary penalties and legal prosecution.</p>
+</section>
+
+<p>For more details, visit the official <a href="https://www.canada.ca/en/services/benefits/ei.html">Employment Insurance overview</a>.</p>
+
+<div class="wb-fnote" role="note">
+  <h2 id="fn">Footnotes and references</h2>
+  <dl>
+    <dt>Footnote 1</dt>
+    <dd id="fn1">
+      <p>Regional economic rates are determined on the basis of monthly Statistics Canada labour force surveys.</p>
+      <p class="fn-rtn"><a href="#fn1-rf"><span class="wb-inv">Return to footnote </span>1<span class="wb-inv"> referrer</span></a></p>
+    </dd>
+    <dt>Footnote 2</dt>
+    <dd id="fn2">
+      <p>Maximum weekly benefit is subject to annual indexation in accordance with section 66 of the Employment Insurance Act.</p>
+      <p class="fn-rtn"><a href="#fn2-rf"><span class="wb-inv">Return to footnote </span>2<span class="wb-inv"> referrer</span></a></p>
+    </dd>
+  </dl>
+</div>`;
+
+const SAMPLE_FR_DOCX_HTML = `<h1>Guide des prestations et des travailleurs du Canada</h1>
+<p>Trouvez des renseignements complets sur les prestations d'assurance-emploi fédérales, les indemnités de maladie, les congés de maternité et parentaux, ainsi que les mesures de soutien à la transition de carrière offertes aux travailleurs de tout le Canada.</p>
+
+<h2>Sur cette page</h2>
+<ul>
+  <li><a href="#overview">Aperçu du programme</a></li>
+  <li><a href="#eligibility">Critères d'admissibilité et de qualification</a></li>
+  <li><a href="#rates">Taux de prestations et seuils régionaux</a></li>
+  <li><a href="#details">Documentation et procédures supplémentaires</a></li>
+  <li><a href="#notices">Avis importants et obligations</a></li>
+  <li><a href="#fn">Notes de bas de page et références</a></li>
+</ul>
+
+<h2>Aperçu du programme</h2>
+<p>L'assurance-emploi (AE) offre un soutien du revenu temporaire aux personnes qui ont perdu leur emploi sans en être responsables ou qui prennent un congé en raison d'événements particuliers de la vie.</p>
+
+<h2>Critères d'admissibilité et de qualification</h2>
+<p>Pour être admissibles au versement de prestations régulières, les demandeurs doivent satisfaire à plusieurs critères précis selon leur catégorie d'emploi&nbsp;:</p>
+
+<ul>
+  <li>Critères d'admissibilité standard&nbsp;:
+    <ul>
+      <li>Vous occupiez un emploi assurable pendant le nombre d'heures requis.</li>
+      <li>Vous avez été sans travail ni rémunération assurable pendant au moins 7 jours civils consécutifs.</li>
+      <li>Vous êtes capable de travailler et disponible pour travailler chaque jour.</li>
+    </ul>
+  </li>
+  <li>Conditions des programmes particuliers&nbsp;:
+    <ul>
+      <li>Les travailleurs autonomes doivent s'inscrire au moins 12 mois avant de présenter une demande.</li>
+      <li>Les travailleurs agricoles saisonniers doivent fournir des attestations de travail régional vérifiées.</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>Taux de prestations et seuils régionaux</h2>
+<p>Le montant et la durée des prestations dépendent de votre rémunération hebdomadaire assurable moyenne et du taux de chômage dans votre région économique<sup id="fn1-rf"><a class="fn-lnk" href="#fn1"><span class="wb-inv">Note de bas de page </span>1</a></sup>.</p>
+
+<table class="table table-bordered">
+  <caption>Tableau 1&nbsp;: Taux de prestations hebdomadaires, heures assurables minimales et durée par région</caption>
+  <thead class="bg-primary">
+    <tr>
+      <th scope="col">Palier régional</th>
+      <th scope="col">Heures assurables minimales</th>
+      <th scope="col">Prestation hebdomadaire maximale<sup id="fn2-rf"><a class="fn-lnk" href="#fn2"><span class="wb-inv">Note de bas de page </span>2</a></sup></th>
+      <th scope="col">Durée des prestations</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>Palier 1 (Chômage élevé)</th>
+      <td>420 heures</td>
+      <td>668&nbsp;$ par semaine</td>
+      <td>Jusqu'à 45 semaines</td>
+    </tr>
+    <tr>
+      <th>Palier 2 (Chômage modéré)</th>
+      <td>560 heures</td>
+      <td>668&nbsp;$ par semaine</td>
+      <td>Jusqu'à 36 semaines</td>
+    </tr>
+    <tr>
+      <th>Palier 3 (Faible chômage)</th>
+      <td>700 heures</td>
+      <td>668&nbsp;$ par semaine</td>
+      <td>Jusqu'à 26 semaines</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Documentation et procédures supplémentaires</h2>
+<p>Consultez les sections réductibles ci-dessous pour connaître les instructions relatives à la transmission des documents justificatifs requis et à la mise à jour de votre profil.</p>
+
+<details>
+  <summary>Comment transmettre les relevés d'emploi justificatifs</summary>
+  <p>Votre employeur transmettra habituellement votre relevé d'emploi (RE) électronique directement à Service Canada. Si vous recevez une copie papier officielle, transmettez-la en ligne par votre portail de compte ou postez-la à votre centre de traitement.</p>
+</details>
+
+<details>
+  <summary>Déclaration des changements de rémunération ou de disponibilité</summary>
+  <p>Vous devez remplir des déclarations bimensuelles du prestataire et déclarer tout gain brut, toute paie de vacances, toute allocation de formation ou toute heure de travail autonome temporaire gagnée au cours de chaque période de déclaration.</p>
+</details>
+
+<h2>Avis importants et obligations</h2>
+<p>Veuillez prendre connaissance de ces avis opérationnels obligatoires avant de soumettre votre demande.</p>
+
+<section class="alert alert-info">
+  <h3>Avis d'information</h3>
+  <p>Ayez toujours votre <strong>numéro d'assurance sociale (NAS)</strong> à 9 chiffres, vos coordonnées de dépôt direct et votre code postal de résidence à portée de main avant de soumettre votre demande.</p>
+</section>
+
+<section class="alert alert-warning">
+  <h3>Avis d'avertissement</h3>
+  <p>L'omission de soumettre votre rapport bimensuel dans les 3 semaines suivant la date d'échéance entraînera la suspension du versement de vos prestations.</p>
+</section>
+
+<section class="alert alert-danger">
+  <h3>Avis juridique et pénalités</h3>
+  <p>Le fait de faire sciemment des déclarations fausses ou trompeuses constitue une infraction fédérale passible d'importantes pénalités administratives pécuniaires et de poursuites judiciaires.</p>
+</section>
+
+<p>Pour en savoir plus, consultez <a href="https://www.canada.ca/fr/services/prestations/ae.html">l'aperçu officiel de l'assurance-emploi</a>.</p>
+
+<h2>Notes de bas de page et références</h2>
+<p>Note 1&nbsp;: Les taux économiques régionaux sont déterminés sur la base des enquêtes mensuelles sur la population active de Statistique Canada.</p>
+<p>Note 2&nbsp;: Le montant maximal des prestations hebdomadaires fait l'objet d'une indexation annuelle conformément à l'article 66 de la Loi sur l'assurance-emploi.</p>`;
 
 // Symmetra Core Constants & Logic
 const BLOCK_SELECTOR =
@@ -204,17 +392,32 @@ function isPlainUrlText(text) {
   return /^(https?:\/\/\S+|www\.\S+)$/i.test(t);
 }
 
+function isFootnoteCitationHref(href) {
+  if (!href) return false;
+  // Individual in-text footnote citation link (e.g. #fn1, #fn-1, #fn_1, #_ftn1, #ftn1, #fn2a)
+  // Excludes section anchor links like #fn, #footnotes, #fnote
+  return /^#(?:fn[-_]?\d+[a-z0-9_-]*|_ftn\d+|ftn\d+)/i.test(href);
+}
+
+function isFootnoteReturnHref(href) {
+  if (!href) return false;
+  return /^#(?:fn[-_]?\d+[a-z0-9_-]*-rf|_ftnref\d+)/i.test(href) || href.includes('-rf');
+}
+
 function isFootnoteElement(el) {
   if (!el || !el.tagName) return false;
   const tag = el.tagName.toLowerCase();
   if (tag === 'sup') {
-    return !!el.querySelector('a.fn-lnk, a[href*="#fn"], a[href*="#_ftn"]') || /^\s*\d{1,3}\s*$/.test(el.textContent);
+    if (el.querySelector('a.fn-lnk') || /^\s*\d{1,3}\s*$/.test(el.textContent)) return true;
+    const a = el.querySelector('a');
+    if (a && isFootnoteCitationHref(a.getAttribute('href') || '')) return true;
+    return false;
   }
   if (tag === 'a') {
     if (el.classList.contains('fn-lnk') || el.classList.contains('fn-rtn')) return true;
     const href = el.getAttribute('href') || '';
-    if (href.startsWith('#fn') || href.includes('-rf') || href.startsWith('#_ftn')) return true;
-    if (el.closest('sup')) return true;
+    if (isFootnoteCitationHref(href) || isFootnoteReturnHref(href)) return true;
+    if (el.closest('sup') && (/^\s*\d{1,3}\s*$/.test(el.textContent) || isFootnoteCitationHref(href))) return true;
   }
   return false;
 }
@@ -222,18 +425,24 @@ function isFootnoteElement(el) {
 function extractBlockFootnotes(el) {
   const footnotes = [];
   const fnLinks = Array.from(
-    el.querySelectorAll(
-      'sup a.fn-lnk, a.fn-lnk, sup > a[href*="#fn"]:not([href*="-rf"]), a[href*="#fn"]:not([href*="-rf"]), sup > a[href*="#_ftn"], a[href*="#_ftn"]'
-    )
-  ).filter((a) => !a.classList.contains('fn-rtn') && !a.closest('.fn-rtn') && !(a.getAttribute('href') || '').includes('-rf'));
+    el.querySelectorAll('sup a.fn-lnk, a.fn-lnk, sup a, a')
+  ).filter((a) => {
+    if (a.classList.contains('fn-rtn') || a.closest('.fn-rtn')) return false;
+    const href = a.getAttribute('href') || '';
+    if (isFootnoteReturnHref(href)) return false;
+    if (a.classList.contains('fn-lnk')) return true;
+    if (isFootnoteCitationHref(href)) return true;
+    if (a.closest('sup') && /^\s*\d{1,3}\s*$/.test(a.textContent)) return true;
+    return false;
+  });
 
   fnLinks.forEach((a) => {
     const href = a.getAttribute('href') || '';
-    const numMatch = href.match(/#(?:fn|_ftn)?([a-zA-Z0-9_-]+)/i) || a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/);
+    const numMatch = href.match(/#(?:fn[-_]?|_ftn|ftn)?([a-zA-Z0-9_-]+)/i) || a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/);
     const fnNum = numMatch ? numMatch[1] : '1';
     const sup = a.closest('sup');
     const supId = sup?.getAttribute('id') || a.getAttribute('id') || '';
-    const cleanHref = href.startsWith('#_ftn') ? `#fn${fnNum}` : (href || `#fn${fnNum}`);
+    const cleanHref = href.startsWith('#_ftn') || href.startsWith('#ftn') ? `#fn${fnNum}` : (href || `#fn${fnNum}`);
 
     footnotes.push({
       fnNum,
@@ -334,12 +543,14 @@ function convertFootnotesToFrenchInHtml(html) {
   });
 
   // 4. Process in-text footnote links (sup > a.fn-lnk, a.fn-lnk, etc.)
-  root.querySelectorAll('sup a.fn-lnk, a.fn-lnk, sup > a[href*="#fn"]:not([href*="-rf"]), a[href*="#fn"]:not([href*="-rf"])').forEach((a) => {
+  root.querySelectorAll('sup a.fn-lnk, a.fn-lnk, sup a, a').forEach((a) => {
     const href = a.getAttribute('href') || '';
-    const fnMatch = href.match(/#fn([a-zA-Z0-9_-]+)/i);
-    const fnNum = fnMatch
-      ? fnMatch[1]
-      : (a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/) ? a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/)[1] : '1');
+    if (a.classList.contains('fn-rtn') || a.closest('.fn-rtn') || isFootnoteReturnHref(href)) return;
+    const isFnLink = a.classList.contains('fn-lnk') || isFootnoteCitationHref(href) || (a.closest('sup') && /^\s*\d{1,3}\s*$/.test(a.textContent));
+    if (!isFnLink) return;
+
+    const fnMatch = href.match(/#(?:fn[-_]?|_ftn|ftn)([a-zA-Z0-9_-]+)/i) || a.textContent.match(/\b(\d+)\b/);
+    const fnNum = fnMatch ? fnMatch[1] : (a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/) ? a.textContent.match(/\b([a-zA-Z0-9_-]+)\b/)[1] : '1');
 
     // Ensure link has correct classes and href
     a.className = 'fn-lnk';
@@ -1148,7 +1359,7 @@ function isFootnoteHeadingBlock(block) {
   // Only a genuine heading (or definition term) counts — this rules out
   // table-of-contents bullets/links that merely say "Footnotes".
   if (!isHeadingTag(block.tag) && block.tag !== 'dt') return false;
-  return /^\s*(?:Footnotes?|Notes?\s+de\s+bas\s+de\s+page)\s*[:：]?\s*$/i.test((block.text || '').trim());
+  return /^\s*(?:Footnotes?(?:\s+and\s+references?)?|Notes?\s+de\s+bas\s+de\s+page(?:\s+et\s+r[ée]f[ée]rences?)?)\s*[:：]?\s*$/i.test((block.text || '').trim());
 }
 
 function isFootnoteContentBlock(block, allBlocks = []) {
@@ -1546,7 +1757,7 @@ function computeIssues(
           en.tag +
           '> "' +
           issueSnippet(en.text) +
-          '" — Filled with French filler placeholder [TRADUCTION MANQUANTE : ...] to preserve layout.',
+          '" — Filled with placeholder [TRANSLATION MISSING : ...] to preserve layout.',
       });
     }
   });
@@ -1566,7 +1777,7 @@ function computeIssues(
             (fr ? fr.tag : '?') +
             '> "' +
             issueSnippet(fr ? fr.text : '') +
-            '" — Preserved and inserted into French output so no French content is lost.',
+            '" — Inserted with indicator [EXTRA FRENCH CONTENT : ...] so no French content is lost.',
         });
       }
     });
@@ -1677,6 +1888,57 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 700 !important;
   line-height: 1.2 !important;
   color: var(--gc-heading) !important;
+}
+
+h1 {
+  font-size: 34px !important;
+  margin-top: 20px !important;
+  margin-bottom: 24px !important;
+  position: relative !important;
+}
+
+h1::after {
+  content: "" !important;
+  display: block !important;
+  width: 70px !important;
+  height: 6px !important;
+  background-color: #af3c43 !important;
+  margin-top: 10px !important;
+}
+
+h2 {
+  font-size: 26px !important;
+  margin-top: 24px !important;
+  margin-bottom: 12px !important;
+}
+
+h3 {
+  font-size: 20px !important;
+  margin-top: 20px !important;
+  margin-bottom: 10px !important;
+}
+
+h4 {
+  font-size: 18px !important;
+  margin-top: 16px !important;
+  margin-bottom: 8px !important;
+}
+
+h5 {
+  font-size: 16px !important;
+  margin-top: 14px !important;
+  margin-bottom: 6px !important;
+}
+
+h6 {
+  font-size: 14px !important;
+  margin-top: 12px !important;
+  margin-bottom: 4px !important;
+}
+
+.alert h1::after, .alert > h1::after,
+.panel-heading h1::after, .panel-title h1::after {
+  display: none !important;
 }
 
 a {
@@ -2294,31 +2556,115 @@ summary:hover {
 .gc-swap-active {
   outline: 2px solid #8b5cf6 !important;
   outline-offset: 3px;
+}
+.gc-swap-active:not(.gc-swap-missing):not(.gc-swap-extra) {
   background: transparent !important;
 }
 
 .gc-swap-missing {
-  background: rgba(245, 158, 11, 0.12) !important;
+  background: rgba(245, 158, 11, 0.14) !important;
   border-left: 3px solid #f59e0b !important;
   color: #fbbf24 !important;
   padding-left: 6px !important;
   border-radius: 2px;
 }
+.gc-swap-missing,
+.gc-swap-missing > *,
+.gc-swap-missing a,
+.gc-swap-missing p,
+.gc-swap-missing span,
+.gc-swap-missing strong,
+.gc-swap-missing em,
+.gc-swap-missing h1,
+.gc-swap-missing h2,
+.gc-swap-missing h3,
+.gc-swap-missing h4,
+.gc-swap-missing h5,
+.gc-swap-missing h6 {
+  color: #fbbf24 !important;
+}
 body.gc-light-mode .gc-swap-missing {
-  background: rgba(245, 158, 11, 0.12) !important;
+  background: rgba(245, 158, 11, 0.14) !important;
   border-left: 3px solid #d97706 !important;
   color: #92400e !important;
 }
+body.gc-light-mode .gc-swap-missing,
+body.gc-light-mode .gc-swap-missing > *,
+body.gc-light-mode .gc-swap-missing a,
+body.gc-light-mode .gc-swap-missing p,
+body.gc-light-mode .gc-swap-missing span,
+body.gc-light-mode .gc-swap-missing strong,
+body.gc-light-mode .gc-swap-missing em,
+body.gc-light-mode .gc-swap-missing h1,
+body.gc-light-mode .gc-swap-missing h2,
+body.gc-light-mode .gc-swap-missing h3,
+body.gc-light-mode .gc-swap-missing h4,
+body.gc-light-mode .gc-swap-missing h5,
+body.gc-light-mode .gc-swap-missing h6 {
+  color: #92400e !important;
+}
+.gc-swap-missing.gc-swap-active {
+  background: rgba(245, 158, 11, 0.24) !important;
+  outline: 2px solid #f59e0b !important;
+  outline-offset: 3px;
+}
+body.gc-light-mode .gc-swap-missing.gc-swap-active {
+  background: rgba(245, 158, 11, 0.24) !important;
+  outline: 2px solid #d97706 !important;
+  outline-offset: 3px;
+}
 
 .gc-swap-extra {
-  background: rgba(59, 130, 246, 0.1) !important;
+  background: rgba(59, 130, 246, 0.12) !important;
   border-left: 3px solid #3b82f6 !important;
+  color: #60a5fa !important;
   padding-left: 6px !important;
   border-radius: 2px;
 }
+.gc-swap-extra,
+.gc-swap-extra > *,
+.gc-swap-extra a,
+.gc-swap-extra p,
+.gc-swap-extra span,
+.gc-swap-extra strong,
+.gc-swap-extra em,
+.gc-swap-extra h1,
+.gc-swap-extra h2,
+.gc-swap-extra h3,
+.gc-swap-extra h4,
+.gc-swap-extra h5,
+.gc-swap-extra h6 {
+  color: #60a5fa !important;
+}
 body.gc-light-mode .gc-swap-extra {
-  background: rgba(37, 99, 235, 0.08) !important;
+  background: rgba(37, 99, 235, 0.1) !important;
   border-left: 3px solid #2563eb !important;
+  color: #1e40af !important;
+}
+body.gc-light-mode .gc-swap-extra,
+body.gc-light-mode .gc-swap-extra > *,
+body.gc-light-mode .gc-swap-extra a,
+body.gc-light-mode .gc-swap-extra p,
+body.gc-light-mode .gc-swap-extra span,
+body.gc-light-mode .gc-swap-extra strong,
+body.gc-light-mode .gc-swap-extra em,
+body.gc-light-mode .gc-swap-extra h1,
+body.gc-light-mode .gc-swap-extra h2,
+body.gc-light-mode .gc-swap-extra h3,
+body.gc-light-mode .gc-swap-extra h4,
+body.gc-light-mode .gc-swap-extra h5,
+body.gc-light-mode .gc-swap-extra h6 {
+  color: #1e40af !important;
+}
+.gc-swap-extra.gc-swap-active {
+  background: rgba(59, 130, 246, 0.22) !important;
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 3px;
+}
+body.gc-light-mode .gc-swap-extra.gc-swap-active {
+  background: rgba(37, 99, 235, 0.18) !important;
+  outline: 2px solid #2563eb !important;
+  outline-offset: 3px;
 }
 
 body.mode-focus [data-swap-index] {
@@ -2367,6 +2713,8 @@ const state = {
   outputTab: 'preview', // 'preview' | 'code'
   frViewMode: 'visual', // 'visual' | 'code'
   frCustomHtml: null,
+  frGeneratedCode: null,
+  frCodeModified: false,
 };
 
 // DOM Element References
@@ -2896,6 +3244,22 @@ function buildRawDocxFrameSource(rawDocxHtml) {
         }
       }
     });
+
+    document.addEventListener('toggle', (e) => {
+      const details = e.target.closest('details');
+      if (!details || details._programmatic) return;
+      const allDetails = Array.from(document.querySelectorAll('details'));
+      const detailsIndex = allDetails.indexOf(details);
+      const summary = details.querySelector('summary');
+      const swapIndex = summary ? summary.getAttribute('data-swap-index') : null;
+      window.parent.postMessage({
+        type: 'symmetra-toggle-details',
+        side: 'docx',
+        open: details.open,
+        detailsIndex: detailsIndex,
+        swapIndex: swapIndex ? parseInt(swapIndex, 10) : null,
+      }, '*');
+    }, true);
   </script>
 </body>
 </html>`;
@@ -2989,6 +3353,24 @@ function buildFrameSource(rawHtml, blocks, lang) {
         }
       }
     });
+
+    document.addEventListener('toggle', (e) => {
+      const details = e.target.closest('details');
+      if (!details || details._programmatic) return;
+      const allDetails = Array.from(document.querySelectorAll('details'));
+      const detailsIndex = allDetails.indexOf(details);
+      const summary = details.querySelector('summary');
+      const swapIndex = summary ? summary.getAttribute('data-swap-index') : null;
+      const enIndex = summary ? summary.getAttribute('data-en-index') : null;
+      window.parent.postMessage({
+        type: 'symmetra-toggle-details',
+        side: '${lang}',
+        open: details.open,
+        detailsIndex: detailsIndex,
+        swapIndex: swapIndex ? parseInt(swapIndex, 10) : null,
+        enIndex: enIndex ? parseInt(enIndex, 10) : null,
+      }, '*');
+    }, true);
   </script>
 </body>
 </html>`;
@@ -3035,20 +3417,25 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
               ? row.mergedFrSpans
               : (frBlocks[row.frIndex] ? frBlocks[row.frIndex].spans : []);
             
+            const isMissing = /\[?(?:TRADUCTION\s+MANQUANTE|TRANSLATION\s+MISSING)/i.test(frText);
+            
             replaceBlockTextPreservingLinks(enBlock.el, frText, enBlock.attrTarget, frSpans);
-            tagElementAsSwapTarget(
-              enBlock.el,
-              {
-                'data-swap-index': enIdx,
-                'data-fr-index': row.frIndex,
-                'data-en-index': enIdx,
-                'contenteditable': 'true',
-              },
-              ['gc-swap-editable']
-            );
+            
+            const classes = ['gc-swap-editable'];
+            const attrs = {
+              'data-swap-index': enIdx,
+              'data-fr-index': row.frIndex,
+              'data-en-index': enIdx,
+              'contenteditable': 'true',
+            };
+            if (isMissing) {
+              classes.push('gc-swap-missing');
+              attrs['title'] = 'Translation missing in Word document - Click to enter French translation';
+            }
+            tagElementAsSwapTarget(enBlock.el, attrs, classes);
           } else {
             // English block missing French translation in Word doc:
-            const fillerText = `[TRADUCTION MANQUANTE : ${enBlock.text}]`;
+            const fillerText = `[TRANSLATION MISSING : ${enBlock.text}]`;
             replaceBlockTextPreservingLinks(enBlock.el, fillerText, enBlock.attrTarget, enBlock.spans);
             tagElementAsSwapTarget(
               enBlock.el,
@@ -3056,7 +3443,7 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
                 'data-swap-index': enIdx,
                 'data-en-index': enIdx,
                 'contenteditable': 'true',
-                'title': 'Traduction manquante dans le document Word - Cliquez pour saisir la traduction française',
+                'title': 'Translation missing in Word document - Click to enter French translation',
               },
               ['gc-swap-editable', 'gc-swap-missing']
             );
@@ -3071,14 +3458,17 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
             ? frBlock.tag
             : 'p';
           const newEl = doc.createElement(tag);
-          replaceBlockTextPreservingLinks(newEl, frBlock.text, 'text', frBlock.spans || []);
+          const extraText = /\[?(?:CONTENU\s+FRAN[ÇC]AIS\s+SUPPL[ÉE]MENTAIRE|EXTRA\s+FRENCH\s+CONTENT)/i.test(frBlock.text)
+            ? frBlock.text
+            : `[EXTRA FRENCH CONTENT : ${frBlock.text}]`;
+          replaceBlockTextPreservingLinks(newEl, extraText, 'text', frBlock.spans || []);
           tagElementAsSwapTarget(
             newEl,
             {
               'data-fr-index': row.frIndex,
               'data-extra-fr': 'true',
               'contenteditable': 'true',
-              'title': 'Contenu français supplémentaire provenant du document Word (conservé)',
+              'title': 'Extra French content from Word document (no matching English block in source HTML)',
             },
             ['gc-swap-editable', 'gc-swap-extra']
           );
@@ -3093,19 +3483,22 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
       if (pair && pair.frIndex !== null && frBlocks[pair.frIndex]) {
         const frText = pair.mergedFrText !== undefined ? pair.mergedFrText : frBlocks[pair.frIndex].text;
         const frSpans = pair.mergedFrSpans !== undefined ? pair.mergedFrSpans : frBlocks[pair.frIndex].spans;
+        const isMissing = /\[?(?:TRADUCTION\s+MANQUANTE|TRANSLATION\s+MISSING)/i.test(frText);
         replaceBlockTextPreservingLinks(enBlock.el, frText, enBlock.attrTarget, frSpans);
-        tagElementAsSwapTarget(
-          enBlock.el,
-          {
-            'data-swap-index': enIdx,
-            'data-fr-index': pair.frIndex,
-            'data-en-index': enIdx,
-            'contenteditable': 'true',
-          },
-          ['gc-swap-editable']
-        );
+        const classes = ['gc-swap-editable'];
+        const attrs = {
+          'data-swap-index': enIdx,
+          'data-fr-index': pair.frIndex,
+          'data-en-index': enIdx,
+          'contenteditable': 'true',
+        };
+        if (isMissing) {
+          classes.push('gc-swap-missing');
+          attrs['title'] = 'Translation missing in Word document - Click to enter French translation';
+        }
+        tagElementAsSwapTarget(enBlock.el, attrs, classes);
       } else {
-        const fillerText = `[TRADUCTION MANQUANTE : ${enBlock.text}]`;
+        const fillerText = `[TRANSLATION MISSING : ${enBlock.text}]`;
         replaceBlockTextPreservingLinks(enBlock.el, fillerText, enBlock.attrTarget, enBlock.spans);
         tagElementAsSwapTarget(
           enBlock.el,
@@ -3113,7 +3506,7 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
             'data-swap-index': enIdx,
             'data-en-index': enIdx,
             'contenteditable': 'true',
-            'title': 'Traduction manquante dans le document Word - Cliquez pour saisir la traduction française',
+            'title': 'Translation missing in Word document - Click to enter French translation',
           },
           ['gc-swap-editable', 'gc-swap-missing']
         );
@@ -3167,6 +3560,26 @@ function buildFrenchFrameSource(rawEnHtml, enBlocks, frBlocks, alignPairs) {
         window.parent.postMessage({ type: 'frEdit', enIndex: !isNaN(enIdx) ? enIdx : null, frIndex: frIdx, text: target.innerText }, '*');
       }
     });
+
+    document.addEventListener('toggle', (e) => {
+      const details = e.target.closest('details');
+      if (!details || details._programmatic) return;
+      const allDetails = Array.from(document.querySelectorAll('details'));
+      const detailsIndex = allDetails.indexOf(details);
+      const summary = details.querySelector('summary');
+      const swapIndex = summary ? (summary.getAttribute('data-swap-index') || summary.getAttribute('data-en-index')) : null;
+      const enIndex = summary ? summary.getAttribute('data-en-index') : null;
+      const frIndex = summary ? summary.getAttribute('data-fr-index') : null;
+      window.parent.postMessage({
+        type: 'symmetra-toggle-details',
+        side: 'fr',
+        open: details.open,
+        detailsIndex: detailsIndex,
+        swapIndex: swapIndex ? parseInt(swapIndex, 10) : null,
+        enIndex: enIndex ? parseInt(enIndex, 10) : null,
+        frIndex: frIndex ? parseInt(frIndex, 10) : null,
+      }, '*');
+    }, true);
   </script>
 </body>
 </html>`;
@@ -3196,18 +3609,38 @@ function buildFrenchFrameSourceFromHtml(rawHtml, frBlocks) {
 
   domBlocks.forEach((frBlock, frIdx) => {
     const pair = state.alignPairs ? state.alignPairs.find((p) => p.frIndex === frIdx && !p.skip) : null;
-    const enIdx = pair && pair.enIndex !== null ? pair.enIndex : frIdx;
+    const enIdx = pair && pair.enIndex !== null ? pair.enIndex : null;
+    const isMissing = /\[?(?:TRADUCTION\s+MANQUANTE|TRANSLATION\s+MISSING)/i.test(frBlock.text || '') ||
+      /\[?(?:TRADUCTION\s+MANQUANTE|TRANSLATION\s+MISSING)/i.test(frBlock.el.textContent || '');
+    const isExtra = frBlock.el.hasAttribute('data-extra-fr') ||
+      /\[?(?:CONTENU\s+FRAN[ÇC]AIS\s+SUPPL[ÉE]MENTAIRE|EXTRA\s+FRENCH\s+CONTENT)/i.test(frBlock.text || '') ||
+      /\[?(?:CONTENU\s+FRAN[ÇC]AIS\s+SUPPL[ÉE]MENTAIRE|EXTRA\s+FRENCH\s+CONTENT)/i.test(frBlock.el.textContent || '') ||
+      (pair && pair.enIndex === null) ||
+      (!pair && enIdx === null && state.alignRows && state.alignRows.some((r) => r.frIndex === frIdx && r.enIndex === null));
 
-    tagElementAsSwapTarget(
-      frBlock.el,
-      {
-        'data-swap-index': enIdx,
-        'data-fr-index': frIdx,
-        ...(pair && pair.enIndex !== null ? { 'data-en-index': pair.enIndex } : {}),
-        'contenteditable': 'true',
-      },
-      ['gc-swap-editable']
-    );
+    const classes = ['gc-swap-editable'];
+    const attrs = {
+      'contenteditable': 'true',
+      'data-fr-index': frIdx,
+    };
+
+    if (enIdx !== null) {
+      attrs['data-swap-index'] = enIdx;
+      attrs['data-en-index'] = enIdx;
+    } else {
+      attrs['data-swap-index'] = frIdx;
+    }
+
+    if (isMissing) {
+      classes.push('gc-swap-missing');
+      attrs['title'] = 'Translation missing in Word document - Click to enter French translation';
+    } else if (isExtra) {
+      classes.push('gc-swap-extra');
+      attrs['data-extra-fr'] = 'true';
+      attrs['title'] = 'Extra French content from Word document (no matching English block in source HTML)';
+    }
+
+    tagElementAsSwapTarget(frBlock.el, attrs, classes);
   });
 
   // Ensure all links on the French side are formatted as root-relative
@@ -3235,29 +3668,52 @@ function buildFrenchFrameSourceFromHtml(rawHtml, frBlocks) {
   ${cleanFrenchHtmlPostProcess(doc.body.innerHTML)}
   <script>
     document.addEventListener('click', (e) => {
-      const target = e.target.closest('[data-swap-index]');
+      const target = e.target.closest('[data-swap-index], [data-fr-index]');
       if (target) {
         const rawIdx = target.getAttribute('data-swap-index');
+        const frIdx = target.getAttribute('data-fr-index');
         const idx = parseInt(rawIdx, 10);
         if (!isNaN(idx)) {
-          window.parent.postMessage({ type: 'symmetra-jump', side: 'fr', index: idx }, '*');
+          window.parent.postMessage({ type: 'symmetra-jump', side: 'fr', index: idx, frIndex: frIdx ? parseInt(frIdx, 10) : undefined }, '*');
+        } else if (frIdx) {
+          window.parent.postMessage({ type: 'symmetra-jump', side: 'fr', frIndex: parseInt(frIdx, 10) }, '*');
         }
       }
     });
 
     document.addEventListener('input', (e) => {
-      const target = e.target.closest('[data-swap-index]');
+      const target = e.target.closest('[data-swap-index], [data-fr-index]');
       if (target) {
-        const enIdx = parseInt(target.getAttribute('data-en-index') || target.getAttribute('data-swap-index'), 10);
+        const enIdx = target.hasAttribute('data-en-index') || target.hasAttribute('data-swap-index') ? parseInt(target.getAttribute('data-en-index') || target.getAttribute('data-swap-index'), 10) : null;
         const frIdx = target.hasAttribute('data-fr-index') ? parseInt(target.getAttribute('data-fr-index'), 10) : null;
         window.parent.postMessage({
           type: 'frEdit',
-          enIndex: isNaN(enIdx) ? null : enIdx,
-          frIndex: isNaN(frIdx) ? null : frIdx,
+          enIndex: !isNaN(enIdx) ? enIdx : null,
+          frIndex: !isNaN(frIdx) ? frIdx : null,
           text: target.innerText.trim(),
         }, '*');
       }
     });
+
+    document.addEventListener('toggle', (e) => {
+      const details = e.target.closest('details');
+      if (!details || details._programmatic) return;
+      const allDetails = Array.from(document.querySelectorAll('details'));
+      const detailsIndex = allDetails.indexOf(details);
+      const summary = details.querySelector('summary');
+      const swapIndex = summary ? (summary.getAttribute('data-swap-index') || summary.getAttribute('data-en-index')) : null;
+      const enIndex = summary ? summary.getAttribute('data-en-index') : null;
+      const frIndex = summary ? summary.getAttribute('data-fr-index') : null;
+      window.parent.postMessage({
+        type: 'symmetra-toggle-details',
+        side: 'fr',
+        open: details.open,
+        detailsIndex: detailsIndex,
+        swapIndex: swapIndex ? parseInt(swapIndex, 10) : null,
+        enIndex: enIndex ? parseInt(enIndex, 10) : null,
+        frIndex: frIndex ? parseInt(frIndex, 10) : null,
+      }, '*');
+    }, true);
   </script>
 </body>
 </html>`;
@@ -3530,6 +3986,7 @@ function jumpToBlock(enIdx) {
   state.activePreviewBlock = enIdx;
   state.lastKnownEnIndex = enIdx;
 
+  updateDetailsStateForActiveBlock(enIdx);
   applyActiveHighlight();
   updateActiveBlockHud(enIdx);
   alignPreviewBlocks(enIdx);
@@ -3642,6 +4099,8 @@ function syncScroll(sourceFrame, targetFrame) {
 
     state.lastKnownEnIndex = enIndex;
     state.activePreviewBlock = Math.max(0, Math.min(enIndex, state.enBlocks.length - 1));
+
+    updateDetailsStateForActiveBlock(state.activePreviewBlock);
 
     // The highlighted bar actively follows the scroll position!
     highlightIndexInFrame(sourceFrame, sourceIndex);
@@ -3883,16 +4342,48 @@ function setupIframeEventListeners() {
         }
         win._symmetraFocusHandler = (e) => {
           const target = e.target.closest('[data-swap-index]');
-          if (!target) return;
-          const idx = parseInt(target.getAttribute('data-swap-index'), 10);
-          if (!isNaN(idx) && idx >= 0 && idx < state.enBlocks.length) {
-            state.activePreviewBlock = idx;
-            state.lastKnownEnIndex = idx;
-            applyActiveHighlight();
-            updateActiveBlockHud(idx);
+          if (target) {
+            const idx = parseInt(target.getAttribute('data-swap-index'), 10);
+            if (!isNaN(idx) && idx >= 0 && idx < state.enBlocks.length) {
+              state.activePreviewBlock = idx;
+              state.lastKnownEnIndex = idx;
+              updateDetailsStateForActiveBlock(idx);
+              applyActiveHighlight();
+              updateActiveBlockHud(idx);
+            }
+          } else {
+            // If focused on an element outside of any details, collapse open dropdowns
+            if (!e.target.closest('details')) {
+              updateDetailsStateForActiveBlock(-1);
+            } else {
+              const closedDetails = e.target.closest('details:not([open])');
+              if (closedDetails) {
+                closedDetails.open = true;
+                syncDetailsToggle(frame, closedDetails);
+              }
+            }
           }
         };
         win.addEventListener('focusin', win._symmetraFocusHandler);
+
+        // Details expand / collapse synchronization
+        if (doc) {
+          if (doc._symmetraToggleHandler) {
+            doc.removeEventListener('toggle', doc._symmetraToggleHandler, true);
+          }
+          doc._symmetraToggleHandler = (e) => {
+            const details = e.target.closest('details');
+            if (!details || details._programmatic) return;
+            if (!details.open) {
+              details._justUserClosed = true;
+              setTimeout(() => {
+                details._justUserClosed = false;
+              }, 400);
+            }
+            syncDetailsToggle(frame, details);
+          };
+          doc.addEventListener('toggle', doc._symmetraToggleHandler, true);
+        }
       } catch (e) {
         console.warn('Iframe attach error', e);
       }
@@ -3913,7 +4404,192 @@ function setupIframeEventListeners() {
   }
 }
 
-// Global PostMessage receiver for iframe clicks and edits
+function updateDetailsStateForActiveBlock(enIdx) {
+  const allFrames = [
+    { frame: enPreviewFrame, indexAttr: ['data-en-index', 'data-swap-index'], indexVal: enIdx },
+    { frame: frPreviewFrame, indexAttr: ['data-fr-index', 'data-swap-index'], indexVal: typeof enIdx === 'number' ? (enIdx + (state.syncOffset || 0)) : -1 },
+  ];
+
+  if (state.showWordDocView && docxPreviewFrame) {
+    const pair = typeof enIdx === 'number' ? state.alignPairs.find((p) => p.enIndex === enIdx && !p.skip) : null;
+    const docxIdx = pair && pair.frIndex !== null ? pair.frIndex : (typeof enIdx === 'number' ? (enIdx + (state.syncOffset || 0)) : -1);
+    allFrames.push({ frame: docxPreviewFrame, indexAttr: ['data-fr-index', 'data-swap-index'], indexVal: docxIdx });
+  }
+
+  let activeDetailsSwapIndex = null;
+  let activeDetailsEnIndex = null;
+  let activeDetailsFrIndex = null;
+  let activeDetailsIndex = -1;
+  let isInsideAnyDetails = false;
+
+  if (typeof enIdx === 'number' && enIdx >= 0) {
+    for (const { frame, indexAttr, indexVal } of allFrames) {
+      if (!frame) continue;
+      try {
+        const doc = frame.contentDocument || frame.contentWindow?.document;
+        if (!doc) continue;
+        for (const attr of indexAttr) {
+          const targetEl = doc.querySelector(`[${attr}="${indexVal}"]`);
+          if (targetEl) {
+            const parentDetails = targetEl.closest('details');
+            if (parentDetails) {
+              isInsideAnyDetails = true;
+              const allDetails = Array.from(doc.querySelectorAll('details'));
+              activeDetailsIndex = allDetails.indexOf(parentDetails);
+              const summary = parentDetails.querySelector('summary');
+              if (summary) {
+                activeDetailsSwapIndex = summary.getAttribute('data-swap-index');
+                activeDetailsEnIndex = summary.getAttribute('data-en-index');
+                activeDetailsFrIndex = summary.getAttribute('data-fr-index');
+              }
+              break;
+            }
+          }
+        }
+        if (isInsideAnyDetails) break;
+      } catch (e) {
+        console.warn('Error identifying active details', e);
+      }
+    }
+  }
+
+  let layoutShiftOccurred = false;
+
+  allFrames.forEach(({ frame }) => {
+    if (!frame) return;
+    try {
+      const doc = frame.contentDocument || frame.contentWindow?.document;
+      if (!doc) return;
+
+      const allDetails = Array.from(doc.querySelectorAll('details'));
+      allDetails.forEach((d, idx) => {
+        let isTarget = false;
+        if (isInsideAnyDetails) {
+          const summary = d.querySelector('summary');
+          const sSwap = summary ? summary.getAttribute('data-swap-index') : null;
+          const sEn = summary ? summary.getAttribute('data-en-index') : null;
+          const sFr = summary ? summary.getAttribute('data-fr-index') : null;
+
+          if (activeDetailsSwapIndex !== null && sSwap === activeDetailsSwapIndex) {
+            isTarget = true;
+          } else if (activeDetailsEnIndex !== null && (sEn === activeDetailsEnIndex || sSwap === activeDetailsEnIndex)) {
+            isTarget = true;
+          } else if (activeDetailsFrIndex !== null && sFr === activeDetailsFrIndex) {
+            isTarget = true;
+          } else if (activeDetailsIndex >= 0 && idx === activeDetailsIndex) {
+            isTarget = true;
+          }
+        }
+
+        if (isTarget) {
+          if (!d.open && !d._justUserClosed) {
+            d._programmatic = true;
+            d.open = true;
+            layoutShiftOccurred = true;
+            setTimeout(() => {
+              d._programmatic = false;
+            }, 120);
+          }
+        } else {
+          if (d.open) {
+            d._programmatic = true;
+            d.open = false;
+            layoutShiftOccurred = true;
+            setTimeout(() => {
+              d._programmatic = false;
+            }, 120);
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('Error updating details state', e);
+    }
+  });
+
+  if (layoutShiftOccurred) {
+    setTimeout(() => {
+      if (state.autoSync && !state.syncPaused && typeof state.activePreviewBlock === 'number') {
+        alignPreviewBlocks(state.activePreviewBlock);
+      }
+    }, 60);
+  }
+}
+
+function syncDetailsToggle(sourceFrame, sourceDetails) {
+  if (!sourceDetails) return;
+  const isOpen = sourceDetails.open;
+
+  const srcDoc = sourceFrame.contentDocument || sourceFrame.contentWindow?.document;
+  if (!srcDoc) return;
+
+  const allSrcDetails = Array.from(srcDoc.querySelectorAll('details'));
+  const detailsIndex = allSrcDetails.indexOf(sourceDetails);
+  const summary = sourceDetails.querySelector('summary');
+  const swapIndex = summary ? (summary.getAttribute('data-swap-index') || summary.getAttribute('data-en-index')) : null;
+  const enIndex = summary ? summary.getAttribute('data-en-index') : null;
+  const frIndex = summary ? summary.getAttribute('data-fr-index') : null;
+
+  const allFrames = [
+    { frame: enPreviewFrame, name: 'en' },
+    { frame: frPreviewFrame, name: 'fr' },
+    { frame: docxPreviewFrame, name: 'docx' },
+  ];
+
+  allFrames.forEach(({ frame }) => {
+    if (!frame || frame === sourceFrame) return;
+    try {
+      const tDoc = frame.contentDocument || frame.contentWindow?.document;
+      if (!tDoc) return;
+
+      let targetDetails = null;
+
+      // 1. Match by summary swap-index or en-index
+      if (swapIndex !== null || enIndex !== null) {
+        const targetSummary = tDoc.querySelector(
+          `details summary[data-swap-index="${swapIndex}"], details summary[data-en-index="${enIndex !== null ? enIndex : swapIndex}"]`
+        );
+        if (targetSummary) {
+          targetDetails = targetSummary.closest('details');
+        }
+      }
+
+      // 2. Match by summary fr-index
+      if (!targetDetails && frIndex !== null) {
+        const targetSummary = tDoc.querySelector(`details summary[data-fr-index="${frIndex}"]`);
+        if (targetSummary) {
+          targetDetails = targetSummary.closest('details');
+        }
+      }
+
+      // 3. Fallback to matching by ordinal index among details elements
+      if (!targetDetails && detailsIndex >= 0) {
+        const allTargetDetails = tDoc.querySelectorAll('details');
+        if (allTargetDetails[detailsIndex]) {
+          targetDetails = allTargetDetails[detailsIndex];
+        }
+      }
+
+      if (targetDetails && targetDetails.open !== isOpen) {
+        targetDetails._programmatic = true;
+        targetDetails.open = isOpen;
+        setTimeout(() => {
+          targetDetails._programmatic = false;
+        }, 120);
+      }
+    } catch (err) {
+      console.warn('Error syncing details toggle', err);
+    }
+  });
+
+  // Re-align active preview block after details layout shift
+  setTimeout(() => {
+    if (state.autoSync && !state.syncPaused && typeof state.activePreviewBlock === 'number') {
+      alignPreviewBlocks(state.activePreviewBlock);
+    }
+  }, 60);
+}
+
+// Global PostMessage receiver for iframe clicks, edits, and details toggles
 window.addEventListener('message', (e) => {
   if (!e.data || typeof e.data !== 'object') return;
 
@@ -3931,6 +4607,62 @@ window.addEventListener('message', (e) => {
         jumpToBlock(index);
       }
     }
+  } else if (e.data.type === 'symmetra-toggle-details') {
+    const { side, open, detailsIndex, swapIndex, enIndex, frIndex } = e.data;
+    const sourceFrame = side === 'en' ? enPreviewFrame : (side === 'docx' ? docxPreviewFrame : frPreviewFrame);
+    if (sourceFrame) {
+      const srcDoc = sourceFrame.contentDocument || sourceFrame.contentWindow?.document;
+      const details = srcDoc ? (
+        (swapIndex !== null ? srcDoc.querySelector(`details summary[data-swap-index="${swapIndex}"]`)?.closest('details') : null) ||
+        (typeof detailsIndex === 'number' ? srcDoc.querySelectorAll('details')[detailsIndex] : null)
+      ) : null;
+      if (details) {
+        syncDetailsToggle(sourceFrame, details);
+        return;
+      }
+    }
+
+    const allFrames = [
+      { frame: enPreviewFrame, name: 'en' },
+      { frame: frPreviewFrame, name: 'fr' },
+      { frame: docxPreviewFrame, name: 'docx' },
+    ];
+
+    allFrames.forEach(({ frame, name }) => {
+      if (!frame || name === side) return;
+      try {
+        const tDoc = frame.contentDocument || frame.contentWindow?.document;
+        if (!tDoc) return;
+        let targetDetails = null;
+        if (swapIndex !== null || enIndex !== null) {
+          const targetSummary = tDoc.querySelector(
+            `details summary[data-swap-index="${swapIndex}"], details summary[data-en-index="${enIndex !== null ? enIndex : swapIndex}"]`
+          );
+          if (targetSummary) targetDetails = targetSummary.closest('details');
+        }
+        if (!targetDetails && frIndex !== null) {
+          const targetSummary = tDoc.querySelector(`details summary[data-fr-index="${frIndex}"]`);
+          if (targetSummary) targetDetails = targetSummary.closest('details');
+        }
+        if (!targetDetails && typeof detailsIndex === 'number' && detailsIndex >= 0) {
+          const allTargetDetails = tDoc.querySelectorAll('details');
+          if (allTargetDetails[detailsIndex]) targetDetails = allTargetDetails[detailsIndex];
+        }
+        if (targetDetails && targetDetails.open !== open) {
+          targetDetails._programmatic = true;
+          targetDetails.open = open;
+          setTimeout(() => {
+            targetDetails._programmatic = false;
+          }, 120);
+        }
+      } catch (err) {}
+    });
+
+    setTimeout(() => {
+      if (state.autoSync && !state.syncPaused && typeof state.activePreviewBlock === 'number') {
+        alignPreviewBlocks(state.activePreviewBlock);
+      }
+    }, 60);
   } else if (e.data.type === 'frEdit') {
     const { enIndex, frIndex, text } = e.data;
     if (frIndex !== null && state.frBlocks[frIndex]) {
@@ -4699,16 +5431,16 @@ function renderStatsBar() {
     
     if (hasErrors) {
       healthPill.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-rose-500"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" x2="12" y2="12"/><line x1="12" x2="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span>${nMiss} missing block(s) • ${nMatched}/${nEn} matched</span>`;
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-rose-500"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" x2="12" y2="12"/><line x1="12" x2="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>${nMiss} Missing • ${nMatched}/${nEn} matched</span>`;
     } else if (hasWarnings) {
       healthPill.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-amber-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" x2="13"/><line x1="12" x2="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span>${nMis > 0 ? `${nMis} mismatches` : typoIssues.length > 0 ? `${typoIssues.length} typo notices` : `${qaIssues.length} QA notice(s)`} • ${nMatched}/${nEn} matched</span>`;
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-amber-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" x2="13"/><line x1="12" x2="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>${nMis > 0 ? `${nMis} Mismatch` : typoIssues.length > 0 ? `${typoIssues.length} Typo` : `${qaIssues.length} QA`} • ${nMatched}/${nEn} matched</span>`;
     } else {
       healthPill.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
-        <span>100% Aligned • ${nMatched} blocks matched</span>`;
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+        <span>100% Aligned • ${nMatched} matched</span>`;
     }
   }
 
@@ -4906,53 +5638,38 @@ function renderDrawerBody(category) {
         </div>`;
     } else {
       const rows = typoList
-        .map(
-          (item) => `
-        <div class="p-3.5 border-b border-border bg-surface hover:bg-surface-hover/50 transition-colors flex items-start justify-between gap-3">
-          <div class="flex-1">
-            <div class="flex items-center gap-2 mb-1.5">
-              <span class="tag tag-fr text-[10px]">FR #${item.frIndex + 1}</span>
-              <span class="text-xs font-bold text-text">${item.issues.map((iss) => iss.label).join(', ')}</span>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono p-2.5 rounded-lg bg-surface-soft border border-border">
-              <div class="overflow-hidden">
-                <div class="flex items-center gap-1.5 text-text-muted text-[10px] font-sans font-semibold mb-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                  <span>CURRENT TEXT:</span>
-                </div>
-                <div class="text-text leading-relaxed whitespace-pre-wrap break-words">
-                  ${highlightTypoOriginal(getTypoSnippetWindow(item.originalText, 140))}
-                </div>
-              </div>
-              <div class="overflow-hidden">
-                <div class="flex items-center gap-1.5 text-text-muted text-[10px] font-sans font-semibold mb-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  <span>SUGGESTED FRENCH TYPOGRAPHY:</span>
-                </div>
-                <div class="text-text leading-relaxed whitespace-pre-wrap break-words">
-                  ${highlightTypoFixed(getTypoSnippetWindow(item.fixedText, 140))}
-                </div>
-              </div>
+        .map((item) => {
+          const pair = state.alignPairs.find((p) => p.frIndex === item.frIndex && !p.skip);
+          const enJumpAttr = pair && pair.enIndex !== null ? `data-jump-en="${pair.enIndex}"` : '';
+          const frJumpAttr = `data-jump-fr="${item.frIndex}"`;
+
+          return `
+        <div class="issue-row issue-row-clickable" ${enJumpAttr} ${frJumpAttr}>
+          <div class="issue-side warn">SPACING</div>
+          <div>
+            <div class="issue-title">FR Block #${item.frIndex + 1} — ${escapeHtml(item.issues.map((iss) => iss.label).join(', '))}</div>
+            <div class="issue-detail text-text font-mono text-xs p-2 rounded bg-surface-soft border border-border mt-1 leading-relaxed">
+              ${highlightTypoOriginal(getTypoSnippetWindow(item.originalText, 140))}
             </div>
           </div>
-          <div class="flex flex-col gap-1.5 pt-1">
-            <button type="button" class="btn btn-primary text-xs px-3 py-1 fix-typo-btn" data-fr-idx="${item.frIndex}">
+          <div class="issue-status">
+            <button type="button" class="btn btn-primary text-xs px-3 py-1 fix-typo-btn w-full text-center" data-fr-idx="${item.frIndex}">
               Fix Spacing
             </button>
-            <button type="button" class="btn btn-secondary text-xs px-2.5 py-0.5 issue-row-clickable" data-jump-fr="${item.frIndex}">
-              Jump →
-            </button>
           </div>
-        </div>`
-        )
+          <div>
+            <button type="button" class="btn btn-secondary text-xs px-2.5 py-1">Jump →</button>
+          </div>
+        </div>`;
+        })
         .join('');
 
       drawerBody.innerHTML = `
         ${diagHeader}
         <div class="p-3.5 bg-surface-soft border-b border-border flex items-center justify-between">
           <div>
-            <div class="text-xs font-bold text-text">French Punctuation &amp; Non-Breaking Space Linter</div>
-            <div class="text-[11px] text-text-secondary">${typoList.length} block(s) require non-breaking spaces (&nbsp; / insécables)</div>
+            <span class="text-xs font-bold text-text">French Punctuation &amp; Non-Breaking Spaces (${typoList.length})</span>
+            <span class="text-[11px] text-text-secondary ml-2">${typoList.length} block(s) require non-breaking spaces (&nbsp; / insécables)</span>
           </div>
           <button type="button" id="fixAllTypoBtn" class="btn btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -5570,7 +6287,7 @@ function generateFrenchHtmlSource() {
             );
           } else {
             // English block missing French translation in Word doc:
-            const fillerText = `[TRADUCTION MANQUANTE : ${enTarget.text}]`;
+            const fillerText = `[TRANSLATION MISSING : ${enTarget.text}]`;
             replaceBlockTextPreservingLinks(
               enTarget.el,
               fillerText,
@@ -5588,7 +6305,10 @@ function generateFrenchHtmlSource() {
             ? frBlock.tag
             : 'p';
           const newEl = doc.createElement(tag);
-          replaceBlockTextPreservingLinks(newEl, frBlock.text, 'text', frBlock.spans || []);
+          const extraText = /\[?(?:CONTENU\s+FRAN[ÇC]AIS\s+SUPPL[ÉE]MENTAIRE|EXTRA\s+FRENCH\s+CONTENT)/i.test(frBlock.text)
+            ? frBlock.text
+            : `[EXTRA FRENCH CONTENT : ${frBlock.text}]`;
+          replaceBlockTextPreservingLinks(newEl, extraText, 'text', frBlock.spans || []);
           insertExtraFrenchElement(doc, newEl, lastInsertedEl);
           lastInsertedEl = newEl;
         }
@@ -5607,7 +6327,7 @@ function generateFrenchHtmlSource() {
           frSpans
         );
       } else {
-        const fillerText = `[TRADUCTION MANQUANTE : ${enTarget.text}]`;
+        const fillerText = `[TRANSLATION MISSING : ${enTarget.text}]`;
         replaceBlockTextPreservingLinks(
           enTarget.el,
           fillerText,
@@ -5729,76 +6449,134 @@ function switchFrenchView(mode) {
   }
 
   if (isCode) {
+    // 1. Keep the exact highlighted active block from Visual view
+    const currentVisualEnIdx = typeof state.activePreviewBlock === 'number' && state.activePreviewBlock >= 0
+      ? state.activePreviewBlock
+      : 0;
+    state.savedVisualActiveBlock = currentVisualEnIdx;
+
+    let visualScrollRatio = null;
+    try {
+      const activeFrame = frPreviewFrame || enPreviewFrame;
+      if (activeFrame && activeFrame.contentDocument) {
+        const frDoc = activeFrame.contentDocument;
+        const frScroll = frDoc.scrollingElement || frDoc.documentElement;
+        if (frScroll && frScroll.scrollHeight > frScroll.clientHeight) {
+          visualScrollRatio = frScroll.scrollTop / (frScroll.scrollHeight - frScroll.clientHeight);
+        }
+      }
+    } catch (_) {}
+
     const htmlCode = generateFrenchHtmlSource();
     if (frCodeEditor) {
       frCodeEditor.value = htmlCode;
+      state.frGeneratedCode = htmlCode;
+      state.frCodeModified = false;
       updateFrCodeView();
-      frCodeEditor.scrollTop = 0;
-      frCodeEditor.scrollLeft = 0;
-      if (frCodeHighlight) {
-        frCodeHighlight.scrollTop = 0;
-        frCodeHighlight.scrollLeft = 0;
+
+      // Find character location of the current active block in the generated HTML code
+      const pair = state.alignPairs.find((p) => p.enIndex === currentVisualEnIdx && !p.skip);
+      const targetFrIdx = pair && pair.frIndex !== null ? pair.frIndex : currentVisualEnIdx;
+      const frBlock = state.frBlocks && state.frBlocks[targetFrIdx] ? state.frBlocks[targetFrIdx] : null;
+      const enBlock = state.enBlocks && state.enBlocks[currentVisualEnIdx] ? state.enBlocks[currentVisualEnIdx] : null;
+
+      let targetCharIndex = -1;
+      if (frBlock && frBlock.text && frBlock.text.trim().length > 3) {
+        const cleanSnippet = frBlock.text.trim().replace(/\s+/g, ' ').substring(0, 30);
+        targetCharIndex = htmlCode.indexOf(cleanSnippet);
       }
-      if (frCodeGutter) {
-        frCodeGutter.scrollTop = 0;
+      if (targetCharIndex === -1 && enBlock && enBlock.text && enBlock.text.trim().length > 3) {
+        const cleanSnippet = enBlock.text.trim().replace(/\s+/g, ' ').substring(0, 30);
+        targetCharIndex = htmlCode.indexOf(cleanSnippet);
       }
+
+      if (targetCharIndex !== -1) {
+        const lineNum = htmlCode.substring(0, targetCharIndex).split('\n').length - 1;
+        const totalLines = Math.max(1, htmlCode.split('\n').length);
+        const maxScroll = Math.max(0, frCodeEditor.scrollHeight - frCodeEditor.clientHeight);
+        frCodeEditor.scrollTop = Math.round((lineNum / totalLines) * maxScroll);
+        frCodeEditor.selectionStart = targetCharIndex;
+        frCodeEditor.selectionEnd = targetCharIndex;
+      } else if (visualScrollRatio !== null && visualScrollRatio > 0) {
+        const maxScroll = Math.max(0, frCodeEditor.scrollHeight - frCodeEditor.clientHeight);
+        frCodeEditor.scrollTop = Math.round(visualScrollRatio * maxScroll);
+      }
+      syncFrCodeScroll();
     }
     if (frPreviewFrame) frPreviewFrame.style.display = 'none';
     if (frCodeWrap) frCodeWrap.style.display = 'flex';
+    requestAnimationFrame(() => {
+      syncFrCodeScroll();
+    });
   } else {
     // Returning to Visual Mode: Update French preview with any code added, modified, or removed in the Code Editor
+    const preservedEnIndex = typeof state.savedVisualActiveBlock === 'number'
+      ? state.savedVisualActiveBlock
+      : (typeof state.activePreviewBlock === 'number' ? state.activePreviewBlock : 0);
+
+    let targetEnIndex = Math.max(0, Math.min(preservedEnIndex, (state.enBlocks ? state.enBlocks.length - 1 : 0)));
+
     if (frCodeEditor && frCodeEditor.value) {
       const editedCode = frCodeEditor.value.trim();
-      state.frCustomHtml = editedCode;
+      const isModified = state.frCodeModified || (state.frGeneratedCode && editedCode !== state.frGeneratedCode.trim());
 
-      // Extract new blocks from edited HTML to update state.frBlocks
-      const parser = new DOMParser();
-      let doc;
-      const hasHtmlTag = /<html[\s>]/i.test(editedCode);
-      if (hasHtmlTag) {
-        doc = parser.parseFromString(editedCode, 'text/html');
+      if (isModified) {
+        state.frCustomHtml = editedCode;
+
+        // Extract new blocks from edited HTML to update state.frBlocks
+        const parser = new DOMParser();
+        let doc;
+        const hasHtmlTag = /<html[\s>]/i.test(editedCode);
+        if (hasHtmlTag) {
+          doc = parser.parseFromString(editedCode, 'text/html');
+        } else {
+          doc = parser.parseFromString('<html><head></head><body></body></html>', 'text/html');
+          doc.body.innerHTML = editedCode;
+        }
+
+        const extractedFrBlocks = extractBlocks(doc.body);
+        state.frBlocks = extractedFrBlocks.map((b) => ({
+          tag: b.tag,
+          attrTarget: b.attrTarget,
+          text: b.text,
+          spans: b.spans,
+        }));
+
+        computeAlignment(targetEnIndex);
+
+        if (frBlockCountBadge) {
+          frBlockCountBadge.textContent = `${state.frBlocks.length} blocks`;
+        }
+        renderStatsBar();
+
+        // Render updated visual preview frame
+        const updatedFrDocHtml = buildFrenchFrameSourceFromHtml(editedCode, state.frBlocks);
+        if (frPreviewFrame) {
+          frPreviewFrame.srcdoc = updatedFrDocHtml;
+        }
       } else {
-        doc = parser.parseFromString('<html><head></head><body></body></html>', 'text/html');
-        doc.body.innerHTML = editedCode;
-      }
-
-      const extractedFrBlocks = extractBlocks(doc.body);
-      state.frBlocks = extractedFrBlocks.map((b) => ({
-        tag: b.tag,
-        attrTarget: b.attrTarget,
-        text: b.text,
-        spans: b.spans,
-      }));
-
-      // Recompute alignments and issues
-      const enTags = state.enBlocks.map((b) => b.tag);
-      const frTags = state.frBlocks.map((b) => b.tag);
-      const rows = alignByTag(enTags, frTags);
-      const pairs = rows.filter((r) => r.enIndex !== null && r.frIndex !== null && !r.skip);
-      const issues = computeIssues(rows, state.enBlocks, state.frBlocks, []);
-
-      state.alignRows = rows;
-      state.alignPairs = pairs;
-      state.issueGroups = issues;
-
-      if (frBlockCountBadge) {
-        frBlockCountBadge.textContent = `${state.frBlocks.length} blocks`;
-      }
-      renderStatsBar();
-
-      // Render updated visual preview frame
-      const updatedFrDocHtml = buildFrenchFrameSourceFromHtml(editedCode, state.frBlocks);
-      if (frPreviewFrame) {
-        frPreviewFrame.srcdoc = updatedFrDocHtml;
+        // Code was not edited: restore visual preview with complete alignment, missing translation, and extra content highlights
+        state.frCustomHtml = null;
+        const updatedFrDocHtml = buildFrenchFrameSource(state.enHtml, state.enBlocks, state.frBlocks, state.alignPairs);
+        if (frPreviewFrame) {
+          frPreviewFrame.srcdoc = updatedFrDocHtml;
+        }
       }
 
       setupIframeEventListeners();
 
-      setTimeout(() => {
-        applyActiveHighlight();
-        alignPreviewBlocks(state.activePreviewBlock || 0);
-        updateActiveBlockHud(state.activePreviewBlock || 0);
-      }, 100);
+      // Restore position reliably across load event & staggered timeouts
+      const restorePosition = () => {
+        jumpToBlock(targetEnIndex);
+      };
+
+      if (frPreviewFrame) {
+        frPreviewFrame.addEventListener('load', restorePosition, { once: true });
+      }
+      setTimeout(restorePosition, 30);
+      setTimeout(restorePosition, 100);
+      setTimeout(restorePosition, 250);
+      setTimeout(restorePosition, 500);
     }
 
     if (frCodeWrap) frCodeWrap.style.display = 'none';
@@ -6167,6 +6945,7 @@ function initEventListeners() {
     formatFrCodeBtn.addEventListener('click', () => {
       if (!frCodeEditor) return;
       frCodeEditor.value = formatHtmlCode(frCodeEditor.value);
+      state.frCodeModified = true;
       updateFrCodeView();
       showToast('HTML code formatted');
     });
@@ -6174,6 +6953,7 @@ function initEventListeners() {
 
   if (frCodeEditor) {
     frCodeEditor.addEventListener('input', () => {
+      state.frCodeModified = true;
       updateFrCodeView();
     });
 
@@ -6191,6 +6971,7 @@ function initEventListeners() {
         const end = frCodeEditor.selectionEnd;
         frCodeEditor.value = frCodeEditor.value.substring(0, start) + '  ' + frCodeEditor.value.substring(end);
         frCodeEditor.selectionStart = frCodeEditor.selectionEnd = start + 2;
+        state.frCodeModified = true;
         updateFrCodeView();
       }
       requestAnimationFrame(syncFrCodeScroll);
