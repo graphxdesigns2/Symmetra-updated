@@ -5149,14 +5149,65 @@ function computeQaDiffAudit() {
   });
 
   // 2. Footnote balance check
-  const enFnCount = (state.enHtml.match(/class="fn-lnk"/g) || []).length;
-  const frFnCount = (state.frBlocks.reduce((acc, b) => acc + (b.text.match(/Note de bas de page \d+/gi) || []).length, 0));
+  const countFootnotesInHtml = (html) => {
+    if (!html) return 0;
+    const fnLinks = html.match(/<a[^>]*class=["'][^"']*fn-lnk[^"']*["'][^>]*>/gi) || [];
+    if (fnLinks.length > 0) return fnLinks.length;
+    const supRf = html.match(/<sup[^>]*id=["']fn\d+-rf["'][^>]*>/gi) || [];
+    if (supRf.length > 0) return supRf.length;
+    const wordFnLinks = html.match(/<a[^>]*href=["']#(?:footnote-|ftn)\d+["'][^>]*>/gi) || [];
+    if (wordFnLinks.length > 0) return wordFnLinks.length;
+    const supNumbers = html.match(/<sup[^>]*>\s*(?:<[^>]+>)*\s*\d+\s*(?:<\/[^>]+>)*\s*<\/sup>/gi) || [];
+    if (supNumbers.length > 0) return supNumbers.length;
+    const bracketMatches = html.match(/\[\d+\]/g) || [];
+    return bracketMatches.length;
+  };
+
+  const countFootnotesInBlocks = (blocks) => {
+    if (!blocks || !blocks.length) return 0;
+    let count = 0;
+    blocks.forEach((b) => {
+      if (b.el && (b.el.querySelector('.fn-lnk, [id$="-rf"], a[href^="#fn"], a[href^="#footnote-"]') || isFootnoteElement(b.el))) {
+        const found = b.el.querySelectorAll('.fn-lnk, [id$="-rf"], a[href^="#fn"], a[href^="#footnote-"]').length;
+        count += Math.max(1, found);
+      } else if (/\b(?:Note\s+de\s+bas\s+de\s+page|Footnote)\s+\d+\b/i.test(b.text || '') || /\[\d+\]/.test(b.text || '')) {
+        count += (b.text.match(/\b(?:Note\s+de\s+bas\s+de\s+page|Footnote)\s+\d+\b|\[\d+\]/gi) || []).length;
+      }
+    });
+    return count;
+  };
+
+  const enFnCount = Math.max(countFootnotesInHtml(state.enHtml), countFootnotesInBlocks(state.enBlocks));
+  const frFnCount = Math.max(
+    countFootnotesInHtml(state.frRawDocxHtml),
+    countFootnotesInBlocks(state.frBlocks)
+  );
+
   if (enFnCount > 0 && enFnCount !== frFnCount) {
+    // Find the first block containing a footnote callout or footnote section to jump accurately
+    let targetEnIndex = state.enBlocks.findIndex((b) => {
+      if (isFootnoteHeadingBlock(b) || isFootnoteContentBlock(b, state.enBlocks)) return true;
+      if (b.el && (b.el.querySelector('.fn-lnk, sup, a[href^="#fn"], [id$="-rf"]') || isFootnoteElement(b.el))) return true;
+      return false;
+    });
+    if (targetEnIndex === -1) targetEnIndex = 0;
+
+    let targetFrIndex = state.frBlocks.findIndex((b) => {
+      if (isFootnoteHeadingBlock(b) || isFootnoteContentBlock(b, state.frBlocks)) return true;
+      if (b.el && (b.el.querySelector('.fn-lnk, sup, a[href^="#fn"], [id$="-rf"], a[href^="#footnote-"]') || isFootnoteElement(b.el))) return true;
+      if (/\b(?:Note\s+de\s+bas\s+de\s+page|Footnote)\s+\d+\b|\[\d+\]/i.test(b.text || '')) return true;
+      return false;
+    });
+    if (targetFrIndex === -1) {
+      const pair = state.alignPairs.find((p) => p.enIndex === targetEnIndex && !p.skip);
+      targetFrIndex = pair && pair.frIndex !== null ? pair.frIndex : targetEnIndex;
+    }
+
     qaIssues.push({
       type: 'fn_mismatch',
       severity: 'info',
-      enIndex: 0,
-      frIndex: 0,
+      enIndex: targetEnIndex,
+      frIndex: targetFrIndex,
       title: `Footnote Count (${enFnCount} EN vs ${frFnCount} FR detected)`,
       detail: `Ensure all footnote callouts (Note de bas de page) align with corresponding English footnotes.`,
       action: 'Verify Footnotes',
